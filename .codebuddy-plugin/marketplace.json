@@ -1,0 +1,48 @@
+{
+  "name": "evomap-workbuddy",
+  "description": "EvoMap plugin marketplace for WorkBuddy and CodeBuddy.",
+  "owner": {
+    "name": "EvoMap",
+    "email": "team@evomap.ai"
+  },
+  "metadata": {
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "evolver",
+      "version": "0.1.0",
+      "description": "Run Evolver's GEP workflow from WorkBuddy: reusable Genes/Capsules, local Proxy MCP tools, review-mode guidance, and auditable agent self-evolution.",
+      "description_en": "Run Evolver's GEP workflow from WorkBuddy: reusable Genes/Capsules, local Proxy MCP tools, review-mode guidance, and auditable agent self-evolution.",
+      "source": "./plugins/evolver",
+      "category": "productivity",
+      "author": {
+        "name": "EvoMap",
+        "email": "team@evomap.ai",
+        "url": "https://evomap.ai"
+      },
+      "homepage": "https://evomap.ai",
+      "repository": "https://github.com/EvoMap/evolver-workbuddy-plugin",
+      "license": "GPL-3.0-or-later",
+      "keywords": [
+        "evolver",
+        "evomap",
+        "gep",
+        "mcp",
+        "workbuddy",
+        "codebuddy",
+        "agent-evolution"
+      ],
+      "skills": [
+        "./plugins/evolver/skills/evolver"
+      ],
+      "commands": [
+        "./plugins/evolver/commands/evolver-status.md",
+        "./plugins/evolver/commands/evolver-review.md",
+        "./plugins/evolver/commands/evolver-search.md"
+      ],
+      "mcpServers": "./plugins/evolver/.mcp.json"
+    }
+  ]
+}
+

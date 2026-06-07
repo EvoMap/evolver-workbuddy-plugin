@@ -1,0 +1,37 @@
+{
+  "name": "evolver",
+  "version": "0.1.0",
+  "description": "Official WorkBuddy / CodeBuddy plugin for Evolver: GEP workflows, local Proxy MCP tools, reusable Genes/Capsules, and auditable agent self-evolution.",
+  "description_en": "Official WorkBuddy / CodeBuddy plugin for Evolver: GEP workflows, local Proxy MCP tools, reusable Genes/Capsules, and auditable agent self-evolution.",
+  "author": {
+    "name": "EvoMap",
+    "email": "team@evomap.ai",
+    "url": "https://evomap.ai"
+  },
+  "homepage": "https://evomap.ai",
+  "repository": "https://github.com/EvoMap/evolver-workbuddy-plugin",
+  "license": "GPL-3.0-or-later",
+  "keywords": [
+    "evolver",
+    "evomap",
+    "gep",
+    "genes",
+    "capsules",
+    "mcp",
+    "workbuddy",
+    "codebuddy",
+    "agent-evolution",
+    "self-evolution"
+  ],
+  "category": "productivity",
+  "skills": [
+    "./skills/evolver"
+  ],
+  "commands": [
+    "./commands/evolver-status.md",
+    "./commands/evolver-review.md",
+    "./commands/evolver-search.md"
+  ],
+  "mcpServers": "./.mcp.json"
+}
+

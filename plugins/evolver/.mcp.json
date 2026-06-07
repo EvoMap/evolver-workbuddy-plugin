@@ -1,0 +1,9 @@
+{
+  "evolver-proxy": {
+    "command": "node",
+    "args": [
+      "${CODEBUDDY_PLUGIN_ROOT}/mcp/evolver-proxy.mjs"
+    ]
+  }
+}
+
