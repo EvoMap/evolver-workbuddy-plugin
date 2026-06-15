@@ -9,7 +9,7 @@ This plugin packages Evolver as a WorkBuddy-ready workflow: a model-invoked skil
 | Layer | Mechanism | Behavior |
 | --- | --- | --- |
 | Passive recall | Skill guidance | Guides WorkBuddy to check local memory, reusable Genes, and relevant Capsules before substantive changes. |
-| Network bridge | MCP server `evolver-proxy` | Exposes `evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
+| Network bridge | MCP server `evolver-proxy` | Exposes `evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
 | Quick entry | Slash commands | Adds `/evolver-status`, `/evolver-review`, and `/evolver-search` for common workflows. |
 | Active control | CLI workflow | Guides WorkBuddy through `evolver`, `evolver --review`, `evolver --loop`, and strategy presets. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and audit events; WorkBuddy should not auto-apply generated output unless the user asks. |
@@ -64,6 +64,7 @@ Start the Proxy by running `evolver` once inside a git repo. The bridge never pr
 - `evolver_search_assets`
 - `evolver_fetch_asset`
 - `evolver_publish_asset`
+- `evolver_distill_conversation`
 - `evolver_poll`
 
 ## Verify
@@ -80,4 +81,3 @@ In normal WorkBuddy use, run `/evolver-status` or ask WorkBuddy to check Evolver
 ## License
 
 GPL-3.0-or-later, matching the upstream Evolver engine. See [LICENSE](LICENSE).
-
