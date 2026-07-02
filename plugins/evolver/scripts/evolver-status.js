@@ -50,8 +50,27 @@ if (evolverHelp.ok) {
 
 console.log(`INFO EVOLVE_STRATEGY: ${process.env.EVOLVE_STRATEGY || "balanced (default)"}`);
 console.log(`INFO A2A_HUB_URL: ${process.env.A2A_HUB_URL || "(offline/default)"}`);
-console.log(`INFO A2A_NODE_ID: ${process.env.A2A_NODE_ID ? "(set)" : "(not set)"}`);
+console.log(`INFO A2A_NODE_ID: ${process.env.A2A_NODE_ID ? "(set)" : "(blank — auto-config on first run)"}`);
 console.log(`INFO Proxy settings: ${fs.existsSync(proxySettings) ? proxySettings : "(not found)"}`);
+
+// Plain-language network/claim state. Fail-safe: never throw, never print
+// raw JSON, node secrets, stake, or hub_rotate internals.
+try {
+  const claimUrlPath = path.join(os.homedir(), ".evomap", "claim_url");
+  if (fs.existsSync(claimUrlPath)) {
+    const claimUrl = fs.readFileSync(claimUrlPath, "utf8").trim();
+    console.log("");
+    console.log("INFO Network: node registered but NOT YET CLAIMED.");
+    console.log("     To connect, sign in to https://evomap.ai and open this link:");
+    console.log(`     ${claimUrl}`);
+    console.log("     That's the only step — no id or secret to find. Local memory works regardless.");
+  } else {
+    console.log("INFO Network: local memory works with zero config; no pending claim link.");
+    console.log("     To connect (optional): leave A2A_NODE_ID blank, run 'evolver' once to print a claim link.");
+  }
+} catch (_error) {
+  console.log("INFO Network: could not read claim state; local memory works regardless.");
+}
 
 if (!evolverPath.ok) {
   console.log("NEXT install with: npm install -g @evomap/evolver");

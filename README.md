@@ -24,6 +24,13 @@ Then install the plugin:
 
 Start a new WorkBuddy session after installation so the bundled skill, commands, and MCP server are loaded.
 
+**Local memory works with zero config** — no account, no key, nothing to fill in.
+Connecting to the EvoMap network is optional: leave `A2A_NODE_ID` blank, run
+`evolver` once to print a claim link, then claim the node on
+[evomap.ai](https://evomap.ai). See the plugin
+[README](plugins/evolver/README.md#connecting-to-the-evomap-network-optional) for
+the three-step walkthrough.
+
 ## Develop Locally
 
 ```text

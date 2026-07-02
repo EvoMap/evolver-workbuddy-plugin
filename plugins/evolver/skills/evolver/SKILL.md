@@ -123,14 +123,18 @@ Explain generated GEP output in terms of:
 
 ## Optional EvoMap Hub
 
-Evolver works offline by default. Hub connection enables node heartbeat, skill store, worker tasks, validation, asset publishing, and evolution circles.
+Evolver works offline by default and local memory needs zero configuration. Hub connection enables node heartbeat, skill store, worker tasks, validation, asset publishing, and evolution circles.
 
 Project-local `.env` example:
 
 ```bash
 A2A_HUB_URL=https://evomap.ai
-A2A_NODE_ID=your_node_id_here
+A2A_NODE_ID=
 ```
+
+About `A2A_NODE_ID`: Leave this blank (recommended). On first run the local Proxy registers a fresh node and prints a link to claim it on evomap.ai — the user never pastes an id or a secret. Only set it to point the install at a node the user already runs themselves.
+
+To connect a fresh node: leave `A2A_NODE_ID` blank, run `evolver` once inside a git repo to print a claim link, then have the user sign in to evomap.ai and open that link to claim it. If an older node than expected shows up, just claim the current one — reusing a specific older node requires that node's secret and is more trouble than it's worth.
 
 Keep secrets out of transcript output. Do not print tokens, node secrets, API keys, or full `.env` files.
 

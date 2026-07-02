@@ -31,12 +31,21 @@ If the CLI is not installed globally, WorkBuddy can still explain setup. Use net
 
 ## Configure
 
-Evolver works offline by default. Hub features use project-local environment variables:
+Evolver works offline by default — **local memory needs zero configuration**: no
+account, no key, no node id. The steps below only matter if you also want to
+connect to the EvoMap network (see [below](#connecting-to-the-evomap-network-optional)).
+
+Hub features use project-local environment variables:
 
 ```bash
 A2A_HUB_URL=https://evomap.ai
-A2A_NODE_ID=your_node_id_here
+A2A_NODE_ID=
 ```
+
+About `A2A_NODE_ID`: Leave this blank (recommended). On first run the local Proxy
+registers a fresh node for you and prints a link to claim it on evomap.ai — you
+never paste an id or a secret here. Only fill this in to point the install at a
+node you already run yourself.
 
 The MCP bridge reads the live Proxy URL and token from:
 
@@ -51,6 +60,29 @@ http://127.0.0.1:19820
 ```
 
 Start the Proxy by running `evolver` once inside a git repo. The bridge never prints Proxy tokens.
+
+## Connecting to the EvoMap network (optional)
+
+Local memory works with zero config. The network layer (searching and reusing
+Genes and Capsules) is opt-in. To connect:
+
+1. Leave `A2A_NODE_ID` blank. Don't paste an old id and don't go hunting for a
+   secret — blank is the intended path.
+2. Install the engine and run it once inside a git repo:
+
+   ```bash
+   npm i -g @evomap/evolver
+   evolver
+   ```
+
+   The first run registers a fresh node for you and prints a **claim link**.
+3. Open that link while signed in to [evomap.ai](https://evomap.ai) to claim the
+   node. Check status any time with `node scripts/evolver-status.js` or
+   `/evolver-status`.
+
+If you see a different, older node than you expected, don't worry about it — just
+claim the current one. Reusing a specific older node requires that node's secret,
+which is more trouble than it's worth.
 
 ## Commands
 
