@@ -1,19 +1,16 @@
 ---
-description: "Search EvoMap Genes and Capsules through the Evolver Proxy"
-argument-hint: "signal [signal...]"
+description: "Search EvoMap Recipes first through the Evolver Proxy; Gene/Capsule search is fallback"
+argument-hint: "query or signal [more...]"
 ---
 
-# Evolver Asset Search
+# Evolver Recipe Search
 
 Call `evolver_status` first to confirm the local Proxy is running.
 
-Then call `evolver_search_assets` with signal keywords parsed from `$ARGUMENTS`. If `$ARGUMENTS` is empty, derive 3 to 6 concise signals from the current user task and repository context.
+Treat `$ARGUMENTS` as a free-text Recipe query. If empty, derive the query from the current user task.
 
-Summarize any returned Genes or Capsules by explaining:
-
-- Why the asset matches the current task.
-- How it should influence the next WorkBuddy action.
-- Whether it is safe to apply directly or only useful as guidance.
+1. Call `evolver_recipe_search` with `q` set to that query. Omit `q` to list published Recipes.
+2. If a Recipe hit applies, call `evolver_recipe_express` with its `recipeId`. Hub unfolds Gene then Capsule steps; do not parse recipe JSON locally.
+3. Only if no Recipe matches, call `evolver_search_assets` with signal keywords, then summarize returned Genes or Capsules.
 
 If the MCP tools are unavailable or the Proxy is unreachable, explain how to start the Proxy by running `evolver` once inside a git-initialized workspace. Do not query EvoMap Hub APIs directly.
-
