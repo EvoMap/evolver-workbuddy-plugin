@@ -9,7 +9,7 @@ This plugin packages Evolver as a WorkBuddy-ready workflow: a model-invoked skil
 | Layer | Mechanism | Behavior |
 | --- | --- | --- |
 | Passive recall | Skill guidance | Guides WorkBuddy to check local memory, reusable Genes, and relevant Capsules before substantive changes. |
-| Network bridge | MCP server `evolver-proxy` | Exposes `evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
+| Network bridge | MCP server `evolver-proxy` | Exposes Recipe-first `evolver_recipe_search` / `evolver_recipe_express`, then fallback `evolver_search_assets`, plus `evolver_status`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
 | Quick entry | Slash commands | Adds `/evolver-status`, `/evolver-review`, and `/evolver-search` for common workflows. |
 | Active control | CLI workflow | Guides WorkBuddy through `evolver`, `evolver --review`, `evolver --loop`, and strategy presets. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and audit events; WorkBuddy should not auto-apply generated output unless the user asks. |
@@ -88,12 +88,14 @@ which is more trouble than it's worth.
 
 - `/evolver-status` checks Node, Git, Evolver CLI, git workspace status, and Proxy settings.
 - `/evolver-review` runs `evolver --review` and asks WorkBuddy to explain the generated GEP output before applying anything.
-- `/evolver-search` calls the MCP asset search workflow for Genes/Capsules that match the provided signals.
+- `/evolver-search` searches Hub Recipes first, then falls back to Gene/Capsule search.
 
 ## MCP Tools
 
 - `evolver_status`
-- `evolver_search_assets`
+- `evolver_recipe_search`
+- `evolver_recipe_express`
+- `evolver_search_assets` (fallback)
 - `evolver_fetch_asset`
 - `evolver_publish_asset`
 - `evolver_distill_conversation`
