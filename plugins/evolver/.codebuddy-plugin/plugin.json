@@ -32,6 +32,7 @@
     "./commands/evolver-review.md",
     "./commands/evolver-search.md"
   ],
+  "hooks": "./hooks/hooks.json",
   "mcpServers": "./.mcp.json"
 }
 

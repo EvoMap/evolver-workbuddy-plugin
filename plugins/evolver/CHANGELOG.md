@@ -5,6 +5,15 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- `SessionStart` hook (`hooks/hooks.json` → `hooks/session-start.mjs`) that probes the
+  local Proxy and injects `hookSpecificOutput.additionalContext`: tool liveness,
+  Recipe-first guidance, and a pending-claim hint. Zero dependencies, fails open.
+- `UserPromptSubmit` hook (`hooks/user-prompt-submit.mjs`) for prompt-relevant
+  Gene/Capsule recall via Proxy `/asset/search`: input gate (slash commands,
+  acknowledgements, <12 chars), `similarity >= 0.9`, at most 2 hits, per-session
+  dedupe, 3s search budget, fails open.
+
 ### Changed
 - MCP bridge is Recipe-first: `evolver_recipe_search` then `evolver_recipe_express`
   against Proxy `/recipe/search` and `/recipe/express`. `evolver_search_assets`

@@ -2,12 +2,14 @@
 
 Self-evolution workflows for WorkBuddy, powered by [Evolver](https://github.com/EvoMap/evolver) (`@evomap/evolver`) and [EvoMap](https://evomap.ai).
 
-This plugin packages Evolver as a WorkBuddy-ready workflow: a model-invoked skill, slash commands, a local status helper, and an MCP bridge to the Evolver Proxy mailbox for Genes and Capsules.
+This plugin packages Evolver as a WorkBuddy-ready workflow: a model-invoked skill, SessionStart / UserPromptSubmit hooks, slash commands, a local status helper, and an MCP bridge to the Evolver Proxy mailbox for Genes and Capsules.
 
 ## What It Does
 
 | Layer | Mechanism | Behavior |
 | --- | --- | --- |
+| Session context | SessionStart hook | On startup, resume, clear, and compact, probes the local Proxy and injects a short `additionalContext` note: whether `evolver_*` tools are live, Recipe-first guidance, and a pending-claim hint. Fails open with `{}`. |
+| Prompt recall | UserPromptSubmit hook | Searches local-Proxy Genes/Capsules with the user's prompt and injects at most 2 hits with `similarity >= 0.9`, each only once per session. Skips slash commands, acknowledgements, and prompts under 12 characters. 3s search budget; fails open with `{}`. |
 | Passive recall | Skill guidance | Guides WorkBuddy to check local memory, reusable Genes, and relevant Capsules before substantive changes. |
 | Network bridge | MCP server `evolver-proxy` | Exposes Recipe-first `evolver_recipe_search` / `evolver_recipe_express`, then fallback `evolver_search_assets`, plus `evolver_status`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
 | Quick entry | Slash commands | Adds `/evolver-status`, `/evolver-review`, and `/evolver-search` for common workflows. |
@@ -90,6 +92,11 @@ which is more trouble than it's worth.
 - `/evolver-review` runs `evolver --review` and asks WorkBuddy to explain the generated GEP output before applying anything.
 - `/evolver-search` searches Hub Recipes first, then falls back to Gene/Capsule search.
 
+## Hooks
+
+- `SessionStart` → `hooks/session-start.mjs` (5s timeout).
+- `UserPromptSubmit` → `hooks/user-prompt-submit.mjs` (5s timeout, 3s Proxy search). Per-session dedupe state lives in `${CODEBUDDY_PLUGIN_DATA}/recall-state.json` (fallback `~/.evolver/workbuddy-hooks/`), pruned after 24h. Plugin `hooks/hooks.json` hooks are not gated by `allowUntrustedFrontmatterHooks`; they run once the plugin is enabled.
+
 ## MCP Tools
 
 - `evolver_status`
@@ -108,6 +115,8 @@ From this plugin directory:
 ```bash
 node scripts/evolver-status.js
 node mcp/evolver-proxy.mjs
+echo '{"hook_event_name":"SessionStart","source":"startup"}' | node hooks/session-start.mjs
+echo '{"session_id":"t","prompt":"Postgres connection pool exhausted, how to debug"}' | node hooks/user-prompt-submit.mjs
 ```
 
 In normal WorkBuddy use, run `/evolver-status` or ask WorkBuddy to check Evolver Proxy status; when the MCP bridge is loaded it should call `evolver_status` first.

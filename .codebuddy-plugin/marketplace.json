@@ -41,6 +41,7 @@
         "./plugins/evolver/commands/evolver-review.md",
         "./plugins/evolver/commands/evolver-search.md"
       ],
+      "hooks": "./plugins/evolver/hooks/hooks.json",
       "mcpServers": "./plugins/evolver/.mcp.json"
     }
   ]
