@@ -212,6 +212,29 @@ const TOOLS = [
     handler: (a) => proxyFetch('POST', '/asset/fetch', { asset_ids: a.asset_ids })
   },
   {
+    name: 'evolver_asset_reuse_result',
+    description: 'Report the verified outcome after reusing a recalled asset. This closes the feedback loop, credits its author, and improves future ranking.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        asset_id: { type: 'string', description: 'The reused asset id.' },
+        outcome: { type: 'string', enum: ['success', 'failed', 'mismatched', 'stale', 'unsafe'] },
+        reason: { type: 'string', description: 'Why the reuse produced this outcome.' },
+        time_saved_seconds: { type: 'number', minimum: 0, description: 'Estimated wall-clock seconds saved.' },
+        task_id: { type: 'string', description: 'Caller-side task identity, when available.' }
+      },
+      required: ['asset_id', 'outcome'],
+      additionalProperties: false
+    },
+    handler: (a) => proxyFetch('POST', '/asset/reuse-result', {
+      asset_id: a.asset_id,
+      outcome: a.outcome,
+      reason: a.reason,
+      time_saved_seconds: a.time_saved_seconds,
+      task_id: a.task_id
+    })
+  },
+  {
     name: 'evolver_publish_asset',
     description: 'Publish one or more evolution assets (Genes/Capsules) to the EvoMap Hub for review. Queued locally and synced by the Proxy in the background; poll asset_submit_result with evolver_poll to see the Hub decision.',
     inputSchema: {

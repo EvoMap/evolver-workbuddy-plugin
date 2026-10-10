@@ -9,12 +9,13 @@ This project follows Semantic Versioning.
 - `SessionStart` hook (`hooks/hooks.json` → `hooks/session-start.mjs`) that probes the
   local Proxy and injects `hookSpecificOutput.additionalContext`: tool liveness,
   Recipe-first guidance, and a pending-claim hint. Zero dependencies, fails open.
-- `UserPromptSubmit` hook (`hooks/user-prompt-submit.mjs`) for prompt-relevant
-  Gene/Capsule recall via Proxy `/asset/search`: input gate (slash commands,
-  acknowledgements, <12 chars), `similarity >= 0.9`, at most 2 hits, per-session
-  dedupe, 5s search budget, fails open. Hits inline the payload summary and
-  Use when / Do not use when conditions, so reuse does not depend on
-  `evolver_fetch_asset`.
+- `UserPromptSubmit` hook (`hooks/user-prompt-submit.mjs`) that recalls by text
+  through Proxy `/asset/fetch` and injects one asset's complete strategy as an
+  `[Evolution Memory]` block, matching evolver-dsh-plugin: 4+ steps, at most 4000
+  strategy characters, per-session dedupe, input gate (slash commands,
+  acknowledgements, <8 chars), 5s recall budget, fails open.
+- MCP tool `evolver_asset_reuse_result` (Proxy `/asset/reuse-result`), which the
+  injected block asks the agent to call after reuse.
 
 ### Changed
 - MCP bridge is Recipe-first: `evolver_recipe_search` then `evolver_recipe_express`

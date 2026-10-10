@@ -9,9 +9,9 @@ This plugin packages Evolver as a WorkBuddy-ready workflow: a model-invoked skil
 | Layer | Mechanism | Behavior |
 | --- | --- | --- |
 | Session context | SessionStart hook | On startup, resume, clear, and compact, probes the local Proxy and injects a short `additionalContext` note: whether `evolver_*` tools are live, Recipe-first guidance, and a pending-claim hint. Fails open with `{}`. |
-| Prompt recall | UserPromptSubmit hook | Searches local-Proxy Genes/Capsules with the user's prompt and injects at most 2 hits with `similarity >= 0.9`, each only once per session. Skips slash commands, acknowledgements, and prompts under 12 characters. Each hit carries the asset's approach summary and use/avoid conditions inline, so the agent can apply it without a fetch. 5s search budget; fails open with `{}`. |
+| Prompt recall | UserPromptSubmit hook | Recalls by text through Proxy `/asset/fetch` (no ids) and injects one asset's complete strategy as an `[Evolution Memory]` block, the same format as evolver-dsh-plugin. Picks the best-scored asset with 4+ steps and at most 4000 strategy characters, each only once per session. Skips slash commands, acknowledgements, and prompts under 8 characters. 5s recall budget; fails open with `{}`. |
 | Passive recall | Skill guidance | Guides WorkBuddy to check local memory, reusable Genes, and relevant Capsules before substantive changes. |
-| Network bridge | MCP server `evolver-proxy` | Exposes Recipe-first `evolver_recipe_search` / `evolver_recipe_express`, then fallback `evolver_search_assets`, plus `evolver_status`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
+| Network bridge | MCP server `evolver-proxy` | Exposes Recipe-first `evolver_recipe_search` / `evolver_recipe_express`, then fallback `evolver_search_assets`, plus `evolver_status`, `evolver_fetch_asset`, `evolver_asset_reuse_result`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
 | Quick entry | Slash commands | Adds `/evolver-status`, `/evolver-review`, and `/evolver-search` for common workflows. |
 | Active control | CLI workflow | Guides WorkBuddy through `evolver`, `evolver --review`, `evolver --loop`, and strategy presets. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and audit events; WorkBuddy should not auto-apply generated output unless the user asks. |
@@ -95,7 +95,7 @@ which is more trouble than it's worth.
 ## Hooks
 
 - `SessionStart` → `hooks/session-start.mjs` (5s timeout).
-- `UserPromptSubmit` → `hooks/user-prompt-submit.mjs` (8s timeout, 5s Proxy search). Per-session dedupe state lives in `${CODEBUDDY_PLUGIN_DATA}/recall-state.json` (fallback `~/.evolver/workbuddy-hooks/`), pruned after 24h. Plugin `hooks/hooks.json` hooks are not gated by `allowUntrustedFrontmatterHooks`; they run once the plugin is enabled.
+- `UserPromptSubmit` → `hooks/user-prompt-submit.mjs` (8s timeout, 5s Proxy recall; selection logic in `hooks/strategy-recall.mjs`). Per-session dedupe state lives in `${CODEBUDDY_PLUGIN_DATA}/recall-state.json` (fallback `~/.evolver/workbuddy-hooks/`), pruned after 24h. Plugin `hooks/hooks.json` hooks are not gated by `allowUntrustedFrontmatterHooks`; they run once the plugin is enabled.
 
 ## MCP Tools
 
@@ -104,6 +104,7 @@ which is more trouble than it's worth.
 - `evolver_recipe_express`
 - `evolver_search_assets` (fallback)
 - `evolver_fetch_asset`
+- `evolver_asset_reuse_result`
 - `evolver_publish_asset`
 - `evolver_distill_conversation`
 - `evolver_poll`
