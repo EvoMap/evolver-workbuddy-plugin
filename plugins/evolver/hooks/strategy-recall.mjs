@@ -1,7 +1,9 @@
 // Mirrors evolver-dsh-plugin src/prime.js so both hosts inject the same
 // [Evolution Memory] block: one asset's complete strategy, recalled by text.
+// Unlike prime.js, steps are never truncated: the block promises complete
+// steps, and the long ones are the code/template contracts that break when cut.
+// STRATEGY_MAX_CHARS alone bounds the injection cost.
 
-const STEP_MAX_CHARS = 400;
 const TITLE_MAX_CHARS = 80;
 const MIN_STRATEGY_STEPS = 4;
 const STRATEGY_MAX_CHARS = 4000;
@@ -20,7 +22,7 @@ function strategySteps(asset) {
   const list = Array.isArray(steps) ? steps : [steps];
   return list
     .filter((step) => typeof step === 'string' && step.trim())
-    .map((step) => step.trim().slice(0, STEP_MAX_CHARS));
+    .map((step) => step.trim());
 }
 
 function strategyChars(steps) {

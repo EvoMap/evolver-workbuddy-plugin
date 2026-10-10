@@ -12,7 +12,8 @@ This project follows Semantic Versioning.
 - `UserPromptSubmit` hook (`hooks/user-prompt-submit.mjs`) that recalls by text
   through Proxy `/asset/fetch` and injects one asset's complete strategy as an
   `[Evolution Memory]` block, matching evolver-dsh-plugin: 4+ steps, at most 4000
-  strategy characters, per-session dedupe, input gate (slash commands,
+  strategy characters (steps are never truncated, unlike dsh), per-session
+  dedupe, input gate (slash commands,
   acknowledgements, <8 chars), 5s recall budget, fails open.
 - MCP tool `evolver_asset_reuse_result` (Proxy `/asset/reuse-result`), which the
   injected block asks the agent to call after reuse.
