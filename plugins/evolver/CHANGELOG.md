@@ -10,7 +10,8 @@ This project follows Semantic Versioning.
   local Proxy and injects `hookSpecificOutput.additionalContext`: tool liveness,
   Recipe-first guidance, and a pending-claim hint. Zero dependencies, fails open.
 - `UserPromptSubmit` hook (`hooks/user-prompt-submit.mjs`) that recalls by text
-  through Proxy `/asset/fetch` and injects one asset's complete strategy as an
+  through Proxy `/asset/fetch` (no `limit`, so the Proxy default of 2 applies)
+  and injects one asset's complete strategy as an
   `[Evolution Memory]` block, matching evolver-dsh-plugin: 4+ steps, at most 4000
   strategy characters (steps are never truncated, unlike dsh), per-session
   dedupe, input gate (slash commands,
