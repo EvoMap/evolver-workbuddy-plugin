@@ -1,6 +1,6 @@
 {
   "name": "evolver",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Official WorkBuddy / CodeBuddy plugin for Evolver: GEP workflows, local Proxy MCP tools, reusable Genes/Capsules, and auditable agent self-evolution.",
   "description_en": "Official WorkBuddy / CodeBuddy plugin for Evolver: GEP workflows, local Proxy MCP tools, reusable Genes/Capsules, and auditable agent self-evolution.",
   "author": {

@@ -6,12 +6,12 @@
     "email": "team@evomap.ai"
   },
   "metadata": {
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "evolver",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "Run Evolver's GEP workflow from WorkBuddy: reusable Genes/Capsules, local Proxy MCP tools, review-mode guidance, and auditable agent self-evolution.",
       "description_en": "Run Evolver's GEP workflow from WorkBuddy: reusable Genes/Capsules, local Proxy MCP tools, review-mode guidance, and auditable agent self-evolution.",
       "source": "./plugins/evolver",

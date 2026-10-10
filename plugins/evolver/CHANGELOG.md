@@ -5,17 +5,18 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-10
+
 ### Added
 - `SessionStart` hook (`hooks/hooks.json` → `hooks/session-start.mjs`) that probes the
   local Proxy and injects `hookSpecificOutput.additionalContext`: tool liveness,
   Recipe-first guidance, and a pending-claim hint. Zero dependencies, fails open.
 - `UserPromptSubmit` hook (`hooks/user-prompt-submit.mjs`) that recalls by text
   through Proxy `/asset/fetch` (no `limit`, so the Proxy default of 2 applies)
-  and injects one asset's complete strategy as an
-  `[Evolution Memory]` block, matching evolver-dsh-plugin: 4+ steps, at most 4000
-  strategy characters (steps are never truncated, unlike dsh), per-session
-  dedupe, input gate (slash commands,
-  acknowledgements, <8 chars), 5s recall budget, fails open.
+  and injects one asset's complete strategy as an `[Evolution Memory]` block,
+  matching evolver-dsh-plugin: 4+ steps, at most 4000 strategy characters
+  (steps are never truncated, unlike dsh), per-session dedupe, input gate
+  (slash commands, acknowledgements, <8 chars), 5s recall budget, fails open.
 - MCP tool `evolver_asset_reuse_result` (Proxy `/asset/reuse-result`), which the
   injected block asks the agent to call after reuse.
 

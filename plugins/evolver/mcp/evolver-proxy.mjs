@@ -18,7 +18,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
-const SERVER = { name: 'evolver-proxy', version: '0.1.0' };
+const SERVER = { name: 'evolver-proxy', version: '0.2.0' };
 const DEFAULT_PROTOCOL = '2025-06-18';
 
 function log(...a) {
