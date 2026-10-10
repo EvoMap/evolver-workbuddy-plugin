@@ -12,7 +12,9 @@ This project follows Semantic Versioning.
 - `UserPromptSubmit` hook (`hooks/user-prompt-submit.mjs`) for prompt-relevant
   Gene/Capsule recall via Proxy `/asset/search`: input gate (slash commands,
   acknowledgements, <12 chars), `similarity >= 0.9`, at most 2 hits, per-session
-  dedupe, 3s search budget, fails open.
+  dedupe, 5s search budget, fails open. Hits inline the payload summary and
+  Use when / Do not use when conditions, so reuse does not depend on
+  `evolver_fetch_asset`.
 
 ### Changed
 - MCP bridge is Recipe-first: `evolver_recipe_search` then `evolver_recipe_express`

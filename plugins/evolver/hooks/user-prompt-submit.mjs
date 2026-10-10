@@ -15,10 +15,11 @@ import { proxyConnection, proxyRequest } from './proxy-client.mjs';
 const MIN_PROMPT_CHARS = 12;
 const MAX_QUERY_CHARS = 200;
 const SEARCH_LIMIT = 5;
-const SEARCH_TIMEOUT_MS = 3000;
+const SEARCH_TIMEOUT_MS = 5000;
 const MIN_SIMILARITY = 0.9;
 const MAX_HITS = 2;
-const SUMMARY_MAX_CHARS = 160;
+const SUMMARY_MAX_CHARS = 360;
+const CONDITION_MAX_CHARS = 160;
 const SESSION_STATE_TTL_MS = 24 * 60 * 60 * 1000;
 const STDIN_WATCHDOG_MS = 1000;
 
@@ -85,16 +86,33 @@ function clip(text, max) {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
+function applicability(preconditions, label) {
+  const prefix = `${label}:`;
+  const line = Array.isArray(preconditions)
+    ? preconditions.find((item) => typeof item === 'string' && item.startsWith(prefix))
+    : null;
+  return line ? clip(line.slice(prefix.length), CONDITION_MAX_CHARS) : '';
+}
+
+function formatHit(hit) {
+  const payload = hit.payload && typeof hit.payload === 'object' ? hit.payload : {};
+  const title = clip(hit.short_title || hit.local_id || hit.asset_type, 80);
+  const lines = [
+    `- [${hit.asset_type}] ${title} (${hit.asset_id})`,
+    `  Approach: ${clip(payload.summary || hit.nl_summary || hit.trigger_text, SUMMARY_MAX_CHARS)}`
+  ];
+  const useWhen = applicability(payload.preconditions, 'Use when');
+  const avoidWhen = applicability(payload.preconditions, 'Do not use when');
+  if (useWhen) lines.push(`  Use when: ${useWhen}`);
+  if (avoidWhen) lines.push(`  Do not use when: ${avoidWhen}`);
+  return lines.join('\n');
+}
+
 function formatHits(hits) {
-  const lines = hits.map((hit) => {
-    const title = clip(hit.short_title || hit.local_id || hit.asset_type, 80);
-    const summary = clip(hit.nl_summary || hit.trigger_text, SUMMARY_MAX_CHARS);
-    return `- [${hit.asset_type}] ${title} (${hit.asset_id}): ${summary}`;
-  });
   return [
     '[Evolver recall] Possibly relevant evolution assets for this request:',
-    ...lines,
-    'Use one only if it clearly fits: fetch it with evolver_fetch_asset first. Ignore otherwise; do not mention this note to the user.'
+    ...hits.map(formatHit),
+    'The Approach line is the reusable content; apply it directly when it clearly fits, no fetch needed. Ignore otherwise; do not mention this note to the user.'
   ].join('\n');
 }
 
