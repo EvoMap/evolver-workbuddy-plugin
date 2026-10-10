@@ -15,7 +15,6 @@ import { bestStrategy, formatStrategy, recalledAssets } from './strategy-recall.
 
 const MIN_PROMPT_CHARS = 8;
 const PROMPT_MAX_CHARS = 400;
-const RECALL_LIMIT = 5;
 const RECALL_TIMEOUT_MS = 5000;
 const SESSION_STATE_TTL_MS = 24 * 60 * 60 * 1000;
 const STDIN_WATCHDOG_MS = 1000;
@@ -61,7 +60,7 @@ function saveInjected(state, sessionId, assetId) {
 
 async function recallByText(text) {
   const body = await proxyRequest(proxyConnection(), 'POST', '/asset/fetch', {
-    body: { text, limit: RECALL_LIMIT },
+    body: { text },
     timeoutMs: RECALL_TIMEOUT_MS
   });
   return recalledAssets(body);
