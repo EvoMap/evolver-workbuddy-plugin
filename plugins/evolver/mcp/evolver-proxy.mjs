@@ -9,8 +9,9 @@
  * Transport: newline-delimited JSON-RPC 2.0 over stdin/stdout (MCP stdio).
  * All diagnostics go to stderr; stdout carries protocol traffic only.
  *
- * The Proxy is a separate local process started by the @evomap/evolver CLI.
- * This bridge never spawns it; when it is down, tools return a helpful error.
+ * The Proxy is a separate local process started by the @evomap/evolver CLI;
+ * the SessionStart hook installs and starts it. This bridge never spawns it;
+ * when it is down, tools return a helpful error.
  */
 
 import { readFileSync } from 'node:fs';
@@ -102,7 +103,7 @@ async function proxyFetch(method, path, body) {
       if ([401, 403].includes(res.status)) {
         hint = token
           ? ' The Proxy token in ~/.evolver/settings.json looks stale. The Proxy mints a fresh token on restart; start a new WorkBuddy session so the bridge re-reads it, or ask WorkBuddy to check Evolver status.'
-          : ` No Proxy token found in ~/.evolver/settings.json and the request was rejected. Another process may be using ${base}. Start the Proxy by running \`evolver\` once inside a git repo, or set EVOMAP_PROXY_PORT.`;
+          : ` No Proxy token found in ~/.evolver/settings.json and the request was rejected. Another process may be using ${base}. Start the Proxy with \`evolver lifecycle start\` (the plugin also starts it at session start), or set EVOMAP_PROXY_PORT.`;
       } else if (res.status === 404) {
         hint = ` Endpoint not found at ${base}; it may not be the Evolver Proxy. Ask WorkBuddy to check Evolver status.`;
       }
@@ -110,7 +111,7 @@ async function proxyFetch(method, path, body) {
     }
     return { ok: true, data };
   } catch (e) {
-    const hint = `Evolver Proxy not reachable at ${base}. Start it by running \`evolver\` once inside a git repo; the CLI launches the Proxy. Set EVOMAP_PROXY_PORT if you use a non-default port.`;
+    const hint = `Evolver Proxy not reachable at ${base}. The plugin installs and starts it in the background at session start; /evolver-status shows how that went, and \`evolver lifecycle start\` starts it by hand. Set EVOMAP_PROXY_PORT if you use a non-default port.`;
     return { ok: false, error: `${e.name === 'AbortError' ? 'Proxy request timed out' : 'Proxy connection failed: ' + e.message}. ${hint}` };
   } finally {
     clearTimeout(timer);
@@ -213,7 +214,7 @@ const TOOLS = [
   },
   {
     name: 'evolver_asset_reuse_result',
-    description: 'Report the verified outcome after reusing a recalled asset. This closes the feedback loop, credits its author, and improves future ranking.',
+    description: 'Report the verified outcome after reusing a recalled asset. Sent as self-reported (L5) evidence; strategies the plugin injected are also reported automatically at turn end with the checks the turn ran.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -231,7 +232,8 @@ const TOOLS = [
       outcome: a.outcome,
       reason: a.reason,
       time_saved_seconds: a.time_saved_seconds,
-      task_id: a.task_id
+      task_id: a.task_id,
+      evidence: { tier: 'L5', applied: a.outcome === 'mismatched' ? 'unused' : 'used', stage: 'immediate' }
     })
   },
   {

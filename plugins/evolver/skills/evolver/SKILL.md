@@ -136,7 +136,7 @@ A2A_NODE_ID=
 
 About `A2A_NODE_ID`: Leave this blank (recommended). On first run the local Proxy registers a fresh node and prints a link to claim it on evomap.ai — the user never pastes an id or a secret. Only set it to point the install at a node the user already runs themselves.
 
-To connect a fresh node: leave `A2A_NODE_ID` blank, run `evolver` once inside a git repo to print a claim link, then have the user sign in to evomap.ai and open that link to claim it. If an older node than expected shows up, just claim the current one — reusing a specific older node requires that node's secret and is more trouble than it's worth.
+To connect a fresh node: leave `A2A_NODE_ID` blank, let the plugin start Evolver (it does so at session start) so it prints a claim link, then have the user sign in to evomap.ai and open that link to claim it. If an older node than expected shows up, just claim the current one — reusing a specific older node requires that node's secret and is more trouble than it's worth.
 
 Keep secrets out of transcript output. Do not print tokens, node secrets, API keys, or full `.env` files.
 
@@ -203,7 +203,7 @@ If install fails with npm permissions, use a user-level npm prefix instead of `s
 
 If loop mode appears to print text only, explain that standalone loop mode emits prompts and records audit state; automatic execution depends on a host runtime that interprets the output.
 
-If MCP tools error with Proxy unreachable, run `evolver` once inside a git repo to launch the Proxy, then retry `evolver_status`.
+If MCP tools error with Proxy unreachable, run `/evolver-status` to see what the plugin's automatic setup did; `evolver lifecycle start` starts the Proxy by hand. Then retry `evolver_status`.
 
 If Hub features do not work, check `A2A_HUB_URL`, `A2A_NODE_ID`, proxy status, and local network access.
 
@@ -212,7 +212,7 @@ If Hub features do not work, check `A2A_HUB_URL`, `A2A_NODE_ID`, proxy status, a
 This plugin includes:
 
 ```bash
-node ${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-status.js
+node ${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-status.mjs
 ```
 
 Run it from the workspace where the user wants to use Evolver. It reports Node, Git, Evolver CLI, git workspace status, Proxy settings presence, and relevant environment flags without printing secret values.

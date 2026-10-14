@@ -1,5 +1,5 @@
 {
-  "description": "Evolver session context (Proxy state, claim hint) and prompt-relevant Gene/Capsule recall",
+  "description": "Evolver session context and background engine setup, prompt-relevant strategy recall, and automatic reuse reports at turn end",
   "hooks": {
     "SessionStart": [
       {
@@ -19,6 +19,29 @@
             "type": "command",
             "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/hooks/user-prompt-submit.mjs\"",
             "timeout": 8
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Write|Edit|MultiEdit|NotebookEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/hooks/pre-tool-use.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/hooks/stop.mjs\"",
+            "timeout": 10
           }
         ]
       }

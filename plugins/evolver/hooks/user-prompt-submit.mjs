@@ -1,23 +1,19 @@
 #!/usr/bin/env node
-/**
- * WorkBuddy / CodeBuddy UserPromptSubmit hook: recall one reusable strategy.
- *
- * Sends the user's prompt to Proxy `/asset/fetch` (text recall, no ids) and
- * injects the best asset's full strategy, at most once per asset per session.
- * Fails open: any error yields `{}` and never blocks the prompt.
- */
-
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { proxyConnection, proxyRequest } from './proxy-client.mjs';
-import { bestStrategy, formatStrategy, recalledAssets } from './strategy-recall.mjs';
+import { DRAIN_TASK, startInBackground } from '../lib/background.mjs';
+import { feedbackLabelOf } from '../lib/feedback-label.mjs';
+import { runHook } from '../lib/hook-io.mjs';
+import { withInjected } from '../lib/injected-ledger.mjs';
+import { proxyConnection, proxyRequest } from '../lib/proxy-client.mjs';
+import { withoutSecrets } from '../lib/redact.mjs';
+import { queueReports } from '../lib/report-queue.mjs';
+import { correctionReportOf } from '../lib/reuse.mjs';
+import { readSession, writeSession } from '../lib/session-state.mjs';
+import { bestStrategy, formatStrategy, recalledAssets } from '../lib/strategy-recall.mjs';
+import { transcriptSize } from '../lib/transcript.mjs';
 
 const MIN_PROMPT_CHARS = 8;
 const PROMPT_MAX_CHARS = 400;
 const RECALL_TIMEOUT_MS = 5000;
-const SESSION_STATE_TTL_MS = 24 * 60 * 60 * 1000;
-const STDIN_WATCHDOG_MS = 1000;
 
 const ACKNOWLEDGEMENT =
   /^(ok|okay|yes|no|y|n|go|lgtm|thanks?|thx|continue|next|好|好的|行|可以|嗯|对|是|是的|继续|谢谢|收到|没问题)[\s.!。！~]*$/i;
@@ -28,34 +24,13 @@ function isWorthRecalling(prompt) {
   return [...prompt].length >= MIN_PROMPT_CHARS;
 }
 
-function stateFilePath() {
-  const dir = process.env.CODEBUDDY_PLUGIN_DATA || join(homedir(), '.evolver', 'workbuddy-hooks');
-  return { dir, file: join(dir, 'recall-state.json') };
-}
-
-function loadSessionState() {
-  try {
-    const state = JSON.parse(readFileSync(stateFilePath().file, 'utf8'));
-    return state && typeof state === 'object' ? state : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveInjected(state, sessionId, assetId) {
-  const now = Date.now();
-  const previous = state[sessionId]?.injected || [];
-  state[sessionId] = { injected: [...new Set([...previous, assetId])], at: now };
-  for (const [id, entry] of Object.entries(state)) {
-    if (!entry || now - entry.at > SESSION_STATE_TTL_MS) delete state[id];
-  }
-  try {
-    const { dir, file } = stateFilePath();
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(file, JSON.stringify(state));
-  } catch {
-    // Dedupe is best effort; a lost write only risks one repeat injection.
-  }
+function reportFollowUp(sessionId, session, prompt) {
+  if (session.labelable.length === 0) return;
+  const label = feedbackLabelOf(prompt);
+  const reports = session.labelable.map((reuse) => correctionReportOf(reuse, label)).filter(Boolean);
+  if (reports.length === 0) return;
+  queueReports(reports.map((report) => ({ report, sessionId })));
+  startInBackground([DRAIN_TASK]);
 }
 
 async function recallByText(text) {
@@ -66,47 +41,30 @@ async function recallByText(text) {
   return recalledAssets(body);
 }
 
-async function recallContext(input) {
-  const prompt = typeof input?.prompt === 'string' ? input.prompt.trim().slice(0, PROMPT_MAX_CHARS) : '';
-  const sessionId = typeof input?.session_id === 'string' ? input.session_id : '';
-  if (!sessionId || !isWorthRecalling(prompt)) return '';
+function startTurn(sessionId, input, previous) {
+  const session = { ...previous, turn: previous.turn + 1, turnStartOffset: transcriptSize(input.transcript_path), labelable: [] };
+  writeSession(sessionId, session);
+  return session;
+}
 
-  const state = loadSessionState();
-  const injectedIds = new Set(state[sessionId]?.injected || []);
-  const match = bestStrategy(await recallByText(prompt), injectedIds);
+async function recallContext(input) {
+  const prompt = typeof input.prompt === 'string' ? input.prompt.trim() : '';
+  const sessionId = typeof input.session_id === 'string' ? input.session_id : '';
+  if (!sessionId) return '';
+
+  const previous = readSession(sessionId);
+  reportFollowUp(sessionId, previous, prompt);
+  const session = startTurn(sessionId, input, previous);
+
+  const text = withoutSecrets(prompt).slice(0, PROMPT_MAX_CHARS);
+  if (!isWorthRecalling(text)) return '';
+  const match = bestStrategy(await recallByText(text), new Set(Object.keys(session.injected)));
   if (!match) return '';
 
-  saveInjected(state, sessionId, match.asset.asset_id);
-  return formatStrategy(match);
+  const injection = formatStrategy(match);
+  const injected = withInjected(session.injected, match.asset.asset_id, { turn: session.turn, strategyText: injection }, Date.now());
+  writeSession(sessionId, { ...session, injected });
+  return injection;
 }
 
-function emit(context) {
-  const output = context
-    ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: context } }
-    : {};
-  process.stdout.write(JSON.stringify(output), () => process.exit(0));
-}
-
-async function run(raw) {
-  try {
-    emit(await recallContext(JSON.parse(raw)));
-  } catch {
-    emit('');
-  }
-}
-
-let buffer = '';
-let started = false;
-const start = () => {
-  if (started) return;
-  started = true;
-  run(buffer);
-};
-setTimeout(start, STDIN_WATCHDOG_MS).unref();
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => {
-  buffer += chunk;
-});
-process.stdin.on('end', start);
-process.stdin.on('error', start);
-process.stdin.resume();
+runHook('UserPromptSubmit', recallContext);

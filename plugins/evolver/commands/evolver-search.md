@@ -13,4 +13,4 @@ Treat `$ARGUMENTS` as a free-text Recipe query. If empty, derive the query from 
 2. If a Recipe hit applies, call `evolver_recipe_express` with its `recipeId`. Hub unfolds Gene then Capsule steps; do not parse recipe JSON locally.
 3. Only if no Recipe matches, call `evolver_search_assets` with signal keywords, then summarize returned Genes or Capsules.
 
-If the MCP tools are unavailable or the Proxy is unreachable, explain how to start the Proxy by running `evolver` once inside a git-initialized workspace. Do not query EvoMap Hub APIs directly.
+If the MCP tools are unavailable or the Proxy is unreachable, run `/evolver-status` to show what the plugin's automatic setup did; `evolver lifecycle start` starts the Proxy by hand. Do not query EvoMap Hub APIs directly.

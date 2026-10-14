@@ -1,0 +1,11 @@
+{
+  "name": "evolver-workbuddy-plugin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test plugins/evolver/test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,5 +1,5 @@
 ---
-description: "Check Evolver CLI, git workspace, and local Proxy status"
+description: "Check the local Proxy, the automatic Evolver setup, and recent reuse reports"
 ---
 
 # Evolver Status
@@ -7,7 +7,7 @@ description: "Check Evolver CLI, git workspace, and local Proxy status"
 Run the bundled status helper:
 
 ```!
-node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-status.js"
+node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-status.mjs"
 ```
 
 Then, if the MCP tool is available, call `evolver_status` and translate the
@@ -15,6 +15,10 @@ result into plain "are you connected?" language for the user — **don't** dump 
 JSON or internal terms like `node_secret`, `stake`, or `hub_rotate`:
 
 - Proxy running state, and pending inbound/outbound mailbox counts.
+- What the automatic engine setup did. If it failed, give its reason and the manual
+  fix the helper prints, and when it retries.
+- Recent reuse reports: how many were delivered and what the Hub said about them
+  (eligible, counted, weight), and any it rejected with the reason.
 - If `~/.evomap/claim_url` exists, the node is registered but **not yet claimed**.
   Tell the user to sign in to evomap.ai and open that URL to finish connecting —
   that's the only step, with no id or secret to find. (The status helper above
