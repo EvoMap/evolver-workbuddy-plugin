@@ -18,13 +18,16 @@ const IS_WINDOWS = process.platform === 'win32';
 
 export const engineDir = () => statePath('engine');
 
-function shellQuoted(args) {
-  return args.map((arg) => (/[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg));
+// Windows argv parsing treats backslashes as literal unless they precede a
+// quote, so those runs (and a trailing run before the closing quote) double.
+export function windowsQuoted(arg) {
+  if (!/[\s"]/.test(arg)) return arg;
+  return `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
 }
 
 function run(command, args, { timeoutMs, env, shell = false }) {
   return new Promise((resolve) => {
-    execFile(command, shell ? shellQuoted(args) : args, { timeout: timeoutMs, encoding: 'utf8', env, shell, windowsHide: true, cwd: os.homedir() },
+    execFile(command, shell ? args.map(windowsQuoted) : args, { timeout: timeoutMs, encoding: 'utf8', env, shell, windowsHide: true, cwd: os.homedir() },
       (error, stdout, stderr) => resolve({
         ok: !error,
         stdout: String(stdout ?? ''),
