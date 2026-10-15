@@ -150,12 +150,13 @@ test('an upgrade whose restart leaves the old Proxy running asks for a restart i
   assert.equal(outcome.previous, '2.0.42');
 });
 
-test('a running Proxy that does not report its version is not restarted', async () => {
-  const runtime = fakeRuntime({ managed: '2.0.44', running: null });
+test('a running Proxy that does not report its version is not taken as new enough', async () => {
+  const runtime = fakeRuntime({ managed: '2.0.44' });
   runtime.runningProxy = async () => ({ version: null });
+  runtime.waitForProxy = async () => ({ version: null });
   const outcome = await prepareEngine(runtime, null);
-  assert.equal(outcome.status, 'ready');
-  assert.deepEqual(runtime.calls, []);
+  assert.deepEqual(runtime.calls, [['managed', 'lifecycle', 'restart']]);
+  assert.equal(outcome.status, 'restart_needed');
 });
 
 test('an unexpected error during setup is recorded as a failure and backed off', async () => {

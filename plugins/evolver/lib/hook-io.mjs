@@ -1,4 +1,5 @@
 const STDIN_WATCHDOG_MS = 1000;
+const STDIN_MAX_WAIT_MS = 3000;
 
 function parsedInput(raw) {
   try {
@@ -15,9 +16,10 @@ function emit(eventName, context) {
 }
 
 // The host may never close stdin, so the hook proceeds on a watchdog once what
-// arrived is a whole JSON payload (or nothing); a large payload still arriving
-// is waited for, up to the hook's own timeout. Reading stdin to the end also
-// keeps the host's writer from hitting EPIPE.
+// arrived is a whole JSON payload (or nothing). A payload still arriving is
+// waited for up to STDIN_MAX_WAIT_MS, below the shortest hook timeout, so the
+// hook always answers. Reading stdin to the end also keeps the host's writer
+// from hitting EPIPE.
 export function runHook(eventName, handle) {
   let buffer = '';
   let started = false;
@@ -30,8 +32,10 @@ export function runHook(eventName, handle) {
       emit(eventName, '');
     }
   };
+  const startedAt = Date.now();
   const watchdog = () => {
-    if (buffer.trim() === '' || parsedInput(buffer) !== null) start();
+    const isReady = buffer.trim() === '' || parsedInput(buffer) !== null || Date.now() - startedAt >= STDIN_MAX_WAIT_MS;
+    if (isReady) start();
     else setTimeout(watchdog, STDIN_WATCHDOG_MS).unref();
   };
   setTimeout(watchdog, STDIN_WATCHDOG_MS).unref();

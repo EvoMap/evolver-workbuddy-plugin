@@ -10,8 +10,7 @@ async function ranCleanly(work) {
   try {
     await work();
     return true;
-  } catch (error) {
-    process.stderr.write(`${error?.stack ?? error}\n`);
+  } catch {
     return false;
   }
 }

@@ -11,7 +11,7 @@ import { readSession, takeFilesBefore, writeSession } from '../lib/session-state
 import { turnActivityOf, turnRecordsSince } from '../lib/transcript.mjs';
 
 function finishedTurnOf(input, session) {
-  const activity = turnActivityOf(turnRecordsSince(input.transcript_path, session.turnStartOffset));
+  const activity = turnActivityOf(turnRecordsSince(input.transcript_path, session.turnStart));
   const fallbackAnswer = typeof input.last_assistant_message === 'string' ? input.last_assistant_message.trim() : '';
   return { ...activity, answer: activity.answer || fallbackAnswer };
 }

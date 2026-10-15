@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { closeSync, openSync, readSync, statSync } from 'node:fs';
 
 import { EDIT_TOOL_NAMES, editedContent } from './edited-content.mjs';
@@ -9,7 +10,7 @@ const TURN_EDITED_MAX_CHARS = 200_000;
 const CHECK_COMMAND_MAX_CHARS = 200;
 const EXIT_CODE = /^Exit Code: (-?\d+)/m;
 const TOOL_ERROR = /^\s*(?:Error\b|<tool_use_error>)/;
-const NEWLINE = 0x0a;
+const FINGERPRINT_BYTES = 256;
 
 export function transcriptSize(transcriptPath) {
   try {
@@ -48,26 +49,35 @@ function afterLastUserMessage(records) {
   return records.slice(last + 1);
 }
 
-function startsALine(transcriptPath, offset) {
-  if (offset === 0) return true;
-  const byte = Buffer.alloc(1);
+function fingerprintBefore(transcriptPath, offset) {
+  const start = Math.max(0, offset - FINGERPRINT_BYTES);
+  const buffer = Buffer.alloc(offset - start);
   const fd = openSync(transcriptPath, 'r');
   try {
-    return readSync(fd, byte, 0, 1, offset - 1) === 1 && byte[0] === NEWLINE;
+    readSync(fd, buffer, 0, buffer.length, start);
   } finally {
     closeSync(fd);
   }
+  return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
-// The offset was taken when the prompt was submitted; a transcript that has
-// since been rewritten no longer has a line boundary there, so the turn is
-// found again from the last user message instead.
-export function turnRecordsSince(transcriptPath, offset) {
+export function transcriptMark(transcriptPath) {
+  const offset = transcriptSize(transcriptPath);
+  return { offset, fingerprint: offset > 0 ? fingerprintBefore(transcriptPath, offset) : '' };
+}
+
+function isSameTranscript(transcriptPath, mark) {
+  if (!mark || transcriptSize(transcriptPath) < mark.offset) return false;
+  return mark.offset === 0 || fingerprintBefore(transcriptPath, mark.offset) === mark.fingerprint;
+}
+
+// The mark was taken when the prompt was submitted. A transcript rewritten
+// since then no longer has the same bytes before it, so the turn is found
+// again from the last user message instead of from a stale offset.
+export function turnRecordsSince(transcriptPath, mark) {
   if (!transcriptPath || transcriptSize(transcriptPath) === 0) return [];
-  if (transcriptSize(transcriptPath) < offset || !startsALine(transcriptPath, offset)) {
-    return afterLastUserMessage(recordsOf(textFrom(0, transcriptPath)));
-  }
-  return recordsOf(textFrom(offset, transcriptPath));
+  if (!isSameTranscript(transcriptPath, mark)) return afterLastUserMessage(recordsOf(textFrom(0, transcriptPath)));
+  return recordsOf(textFrom(mark.offset, transcriptPath));
 }
 
 function argumentsOf(record) {

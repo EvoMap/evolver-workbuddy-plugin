@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { appliedVerdictOf } from '../lib/applied.mjs';
 import { checkEvidenceOf } from '../lib/checks.mjs';
-import { transcriptSize, turnActivityOf, turnRecordsSince } from '../lib/transcript.mjs';
+import { transcriptMark, transcriptSize, turnActivityOf, turnRecordsSince } from '../lib/transcript.mjs';
 
 const FIXTURE = new URL('./fixtures/workbuddy-lru-turn.jsonl', import.meta.url);
 const LRU_STRATEGY = JSON.parse(readFileSync(new URL('./fixtures/lru-turn.json', import.meta.url), 'utf8')).strategyText;
@@ -26,7 +26,7 @@ const bashRecords = (command, text, { status = 'completed', callId = 'c1', args 
 const shellText = (command, stdout, exit) => `Command: ${command}\nStdout: ${stdout}\nStderr: (empty)\nExit Code: ${exit}\nSignal: (none)`;
 
 test('a WorkBuddy turn yields its commands, paths, written code, checks and answer', () => {
-  const turn = turnActivityOf(turnRecordsSince(fileURLToPath(FIXTURE), 0));
+  const turn = turnActivityOf(turnRecordsSince(fileURLToPath(FIXTURE), { offset: 0, fingerprint: '' }));
   assert.deepEqual(turn.checks, [
     { command: 'cd /tmp/lru-e2e && node --test 2>&1 | tail -12', failed: true },
     { command: 'cd /tmp/lru-e2e && node --test 2>&1 | tail -9', failed: false },
@@ -39,7 +39,7 @@ test('a WorkBuddy turn yields its commands, paths, written code, checks and answ
 });
 
 test('an edit the host refused writes nothing that counts, and a background run is no check', () => {
-  const turn = turnActivityOf(turnRecordsSince(fileURLToPath(FIXTURE), 0));
+  const turn = turnActivityOf(turnRecordsSince(fileURLToPath(FIXTURE), { offset: 0, fingerprint: '' }));
   assert.ok(!turn.edits.some((edit) => edit.includes('never written')));
   assert.ok(!turn.checks.some((check) => check.command.includes('--watch')));
   assert.ok(turn.commands.includes('node --test --watch'));
@@ -79,9 +79,9 @@ test('written code is capped at 200,000 characters a turn', () => {
 test('only records after the turn offset are read, and a shrunken transcript falls back to the last prompt', () => {
   const earlier = bashRecords('npm test', shellText('npm test', 'fail', 1), { callId: 'old' });
   const file = transcriptWith(`${earlier.map((record) => JSON.stringify(record)).join('\n')}\n`);
-  const offset = transcriptSize(file);
+  const mark = transcriptMark(file);
   appendFileSync(file, `${bashRecords('npm run lint', shellText('npm run lint', 'ok', 0), { callId: 'new' }).map((record) => JSON.stringify(record)).join('\n')}\n`);
-  assert.deepEqual(turnActivityOf(turnRecordsSince(file, offset)).commands, ['npm run lint']);
+  assert.deepEqual(turnActivityOf(turnRecordsSince(file, mark)).commands, ['npm run lint']);
 
   const compacted = transcriptWith([
     { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'old' }] },
@@ -89,23 +89,37 @@ test('only records after the turn offset are read, and a shrunken transcript fal
     { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'new' }] },
     { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'answer' }] },
   ].map((record) => JSON.stringify(record)).join('\n'));
-  assert.deepEqual(turnActivityOf(turnRecordsSince(compacted, offset + 10_000)), { commands: [], paths: [], edits: [], checks: [], answer: 'answer' });
+  assert.deepEqual(turnActivityOf(turnRecordsSince(compacted, { ...mark, offset: mark.offset + 10_000 })), { commands: [], paths: [], edits: [], checks: [], answer: 'answer' });
 });
 
-test('a transcript rewritten past the old offset is read from the last prompt, not from the stale offset', () => {
+test('a transcript rewritten past the old offset is read from the last prompt, even with a line break at that offset', () => {
   const line = (record) => `${JSON.stringify(record)}\n`;
-  const file = transcriptWith(line({ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'an earlier prompt with some length' }] }));
-  const staleOffset = transcriptSize(file) - 7;
+  const first = line({ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'an earlier prompt' }] });
+  const file = transcriptWith(first);
+  const mark = transcriptMark(file);
+  const promptLine = (text) => line({ type: 'message', role: 'user', content: [{ type: 'input_text', text }] });
+  const rewritten = promptLine('x'.repeat(first.length - promptLine('').length));
+  assert.equal(rewritten.length, first.length);
   writeFileSync(file, [
+    rewritten,
     line({ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'new' }] }),
     ...bashRecords('npm test', shellText('npm test', 'ℹ fail 0', 0)).map(line),
   ].join(''));
-  assert.ok(transcriptSize(file) > staleOffset);
-  assert.deepEqual(turnActivityOf(turnRecordsSince(file, staleOffset)).commands, ['npm test']);
+  assert.deepEqual(turnActivityOf(turnRecordsSince(file, mark)).commands, ['npm test']);
+});
+
+test('a session without a mark is read from the last prompt, not from the start', () => {
+  const line = (record) => `${JSON.stringify(record)}\n`;
+  const file = transcriptWith([
+    ...bashRecords('npm run build', shellText('npm run build', 'ok', 0), { callId: 'old' }).map(line),
+    line({ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'new' }] }),
+    ...bashRecords('npm test', shellText('npm test', 'ℹ fail 0', 0)).map(line),
+  ].join(''));
+  assert.deepEqual(turnActivityOf(turnRecordsSince(file, null)).commands, ['npm test']);
 });
 
 test('a missing or partly written transcript reads as an empty turn', () => {
-  assert.deepEqual(turnRecordsSince('', 0), []);
-  assert.deepEqual(turnRecordsSince(join(tmpdir(), 'no-such-transcript.jsonl'), 0), []);
-  assert.equal(turnRecordsSince(transcriptWith('{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}\n{"type":"func'), 0).length, 1);
+  assert.deepEqual(turnRecordsSince('', null), []);
+  assert.deepEqual(turnRecordsSince(join(tmpdir(), 'no-such-transcript.jsonl'), null), []);
+  assert.equal(turnRecordsSince(transcriptWith('{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}\n{"type":"func'), { offset: 0, fingerprint: '' }).length, 1);
 });

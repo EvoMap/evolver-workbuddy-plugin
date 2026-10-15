@@ -14,3 +14,13 @@ test('environment-style names carrying a secret are redacted with their value', 
 test('ordinary prose and short values are left alone', () => {
   for (const text of ['How do I rotate a token safely?', 'tokenizer: bpe', 'secret=abc']) assert.equal(withoutSecrets(text), text);
 });
+
+test('a quoted secret is redacted whole, spaces included', () => {
+  const cleaned = withoutSecrets('export DB_PASSWORD="correct horse battery staple"');
+  assert.doesNotMatch(cleaned, /horse|battery|staple/);
+  assert.match(cleaned, /\[redacted\]/);
+});
+
+test('code identifiers that merely end in a secret word are left alone', () => {
+  for (const text of ['const cancellationToken = controller.signal;', 'resetPassword = buildResetFlow(user)']) assert.equal(withoutSecrets(text), text);
+});
