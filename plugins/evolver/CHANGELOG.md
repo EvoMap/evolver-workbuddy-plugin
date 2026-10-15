@@ -5,6 +5,35 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Automatic reuse reports. The `Stop` hook reports every strategy the plugin
+  injected through Proxy `POST /asset/reuse-result` as
+  `{asset_id, outcome, task_id, reason, evidence}`, with evidence read off the
+  turn's transcript: the last test/build/lint/type-check (exit code and output,
+  `fail_then_pass` with output pipes ignored) and whether the strategy's steps
+  show up in the turn's commands, paths, written code and answer. A turn with
+  nothing to compare goes out as tier `none` with `applied: partial`.
+- Follow-up reports: the next prompt's correction or approval (`:correction`,
+  L3) and, at the next session in the same project, whether the edited files
+  were kept or reverted (`:retention`, L2). A `PreToolUse` hook on edit tools
+  hashes each file before its first edit.
+- A delivery queue drained by a detached worker and kept for 8 days:
+  `recorded`, `duplicate_report` and ineligible answers are final, terminal or
+  invalid requests are settled as rejected, everything else is retried.
+- Automatic Evolver setup: at session start a detached worker installs or
+  upgrades `@evomap/evolver` (2.0.44 or newer) into the plugin data folder and
+  starts its Proxy with `evolver lifecycle start`, under a cross-process lock,
+  with backoff on failure. The outcome reaches the session context.
+- `/evolver-status` shows the engine setup and the latest report deliveries
+  (`eligible`, `counted`, `weight`) and rejections.
+
+### Changed
+- `evolver_asset_reuse_result` sends self-reported `L5` evidence.
+- `scripts/evolver-status.js` became `scripts/evolver-status.mjs`; the injection
+  dedupe state moved from `recall-state.json` to per-session files.
+- Start hints now name `evolver lifecycle start` instead of running `evolver`
+  inside a git repo.
+
 ## [0.2.0] - 2026-10-10
 
 ### Added

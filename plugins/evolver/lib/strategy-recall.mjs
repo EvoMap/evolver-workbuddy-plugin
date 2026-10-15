@@ -1,8 +1,6 @@
-// Mirrors evolver-dsh-plugin src/prime.js so both hosts inject the same
-// [Evolution Memory] block: one asset's complete strategy, recalled by text.
-// Unlike prime.js, steps are never truncated: the block promises complete
-// steps, and the long ones are the code/template contracts that break when cut.
-// STRATEGY_MAX_CHARS alone bounds the injection cost.
+// Steps are never truncated: the block promises complete steps, and the long
+// ones are the code/template contracts that break when cut. STRATEGY_MAX_CHARS
+// alone bounds the injection cost.
 
 const TITLE_MAX_CHARS = 80;
 const MIN_STRATEGY_STEPS = 4;
