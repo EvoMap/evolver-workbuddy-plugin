@@ -3,11 +3,12 @@
 // a report of some other error — must not revise a verdict, because the Hub
 // counts every report and there is no way to take one back.
 //
-// `X不X` questions are the trap this has to survive: `行不行` and `对不对` are
-// requests for an opinion and contain `不行` and `不对` verbatim.
+// Questions are the trap this has to survive: `行不行`, `对不对`, `不行吗` and
+// a closing `不对吧` ask for an opinion and contain `不行` and `不对` verbatim.
+const ASKS_FOR_OPINION = /\s*(?:[吗嘛么]|吧?\s*[?？]|吧\s*[。.!！~～]*\s*$)/;
 const CORRECTION_PATTERNS = [
-  /(?<!行)不行(?!不)/,
-  /(?<!对)不对(?!不)/,
+  new RegExp(`(?<!行)不行(?!不)(?!${ASKS_FOR_OPINION.source})`),
+  new RegExp(`(?<!对)不对(?!不)(?!${ASKS_FOR_OPINION.source})`),
   /没(?:有)?(?:用|效果|解决|成功|生效)/,
   /不管用/,
   /还是(?:不|没|失败|报错|错)/,

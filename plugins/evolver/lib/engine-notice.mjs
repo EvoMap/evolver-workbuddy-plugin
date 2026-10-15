@@ -19,6 +19,7 @@ const NOTICES = {
   node_unsupported: (outcome) => `[Evolver] Evolver needs Node.js 22.13 or newer, but WorkBuddy runs this plugin's hooks with Node.js ${outcome.node}, so the plugin cannot install or start Evolver. `
     + `Install a newer Node.js and make it the \`node\` on PATH.${retryPhrase(outcome)}`,
   install_failed: (outcome) => `[Evolver] Installing Evolver failed (${outcome.error}). ${MANUAL_INSTALL}${retryPhrase(outcome)}`,
+  setup_error: (outcome) => `[Evolver] Setting up Evolver stopped on an unexpected error (${outcome.error}). ${MANUAL_INSTALL}${retryPhrase(outcome)}`,
   start_failed: (outcome) => `[Evolver] Evolver ${outcome.version} is installed but its Proxy did not start (${outcome.error}). `
     + `Check ~/.evomap/logs/evolver-proxy.log, then run \`evolver lifecycle start\`.${retryPhrase(outcome)}`,
 };

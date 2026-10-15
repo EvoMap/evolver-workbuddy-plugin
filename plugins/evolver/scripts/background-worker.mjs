@@ -6,13 +6,22 @@ import { postReuseResult } from '../lib/proxy-client.mjs';
 import { drainOutbox } from '../lib/report-queue.mjs';
 import { pruneOldSessions } from '../lib/session-state.mjs';
 
-const tasks = new Set(process.argv.slice(2));
-try {
-  if (tasks.has(ENGINE_TASK)) {
-    pruneOldSessions();
-    await setUpEngine(engineRuntime());
+async function ranCleanly(work) {
+  try {
+    await work();
+    return true;
+  } catch {
+    return false;
   }
-  if (tasks.has(DRAIN_TASK)) await drainOutbox(postReuseResult);
-} finally {
-  process.exit(0);
 }
+
+const tasks = new Set(process.argv.slice(2));
+const results = [];
+if (tasks.has(ENGINE_TASK)) {
+  results.push(await ranCleanly(() => {
+    pruneOldSessions();
+    return setUpEngine(engineRuntime());
+  }));
+}
+if (tasks.has(DRAIN_TASK)) results.push(await ranCleanly(() => drainOutbox(postReuseResult)));
+process.exit(results.every(Boolean) ? 0 : 1);

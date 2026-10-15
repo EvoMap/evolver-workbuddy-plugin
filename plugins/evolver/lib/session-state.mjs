@@ -11,7 +11,7 @@ const editsPath = (sessionId) => sessionStatePath('edits', sessionId, 'jsonl');
 
 export function readSession(sessionId) {
   const state = readState(sessionPath(sessionId), {});
-  return { turn: 0, turnStartOffset: 0, injected: {}, labelable: [], ...state };
+  return { turn: 0, turnStart: null, injected: {}, labelable: [], ...state };
 }
 
 export function writeSession(sessionId, state) {
@@ -23,11 +23,12 @@ export function noteFileBefore(sessionId, file, hash) {
 }
 
 export function takeFilesBefore(sessionId) {
+  const { lines, commit } = takeStateLines(editsPath(sessionId));
   const editedBefore = new Map();
-  for (const { path: file, before } of takeStateLines(editsPath(sessionId))) {
+  for (const { path: file, before } of lines) {
     if (typeof file === 'string' && !editedBefore.has(file)) editedBefore.set(file, before);
   }
-  return editedBefore;
+  return { editedBefore, commit };
 }
 
 export function pruneOldSessions(now = Date.now()) {

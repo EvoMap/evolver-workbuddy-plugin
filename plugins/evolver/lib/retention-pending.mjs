@@ -23,10 +23,11 @@ export function rememberForRetention({ sessionId, projectDir, reuses, editedBefo
 }
 
 export function takeDueRetentions({ sessionId, projectDir, now = Date.now() }) {
-  const pending = takeStateLines(pendingPath()).filter((entry) => now - entry.atMs <= OUTBOX_TTL_MS);
+  const { lines, commit } = takeStateLines(pendingPath(), now);
+  const pending = lines.filter((entry) => now - entry.atMs <= OUTBOX_TTL_MS);
   const isDue = (entry) => entry.projectDir === projectDir && entry.sessionId !== sessionId;
   for (const entry of pending.filter((candidate) => !isDue(candidate))) appendStateLine(pendingPath(), entry);
-  return pending.filter(isDue);
+  return { due: pending.filter(isDue), commit };
 }
 
 export function retentionReportsOf(entry) {

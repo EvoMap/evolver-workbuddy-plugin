@@ -77,28 +77,28 @@ export function retentionReportOf(reuse, retentionClass) {
 
 const REJECTED_BY_HUB = /^hub (?:400|422)\b/;
 const PROXY_REFUSED_REQUEST = 400;
+const SERVER_ERROR = 500;
 
 function receiptOf(data) {
   return Object.fromEntries(RECEIPT_FIELDS.filter((field) => data?.[field] !== undefined).map((field) => [field, data[field]]));
 }
 
-function isRejection(data) {
-  return data?.terminal === true || REJECTED_BY_HUB.test(String(data?.reason ?? ''));
+function rejectionOf(reason, status) {
+  return { verdict: REJECTED, reason: String(reason ?? 'rejected'), ...(status !== undefined && { status }) };
 }
 
 function isTaken(data) {
-  return data?.recorded !== false || data?.reason === 'duplicate_report';
+  return data?.recorded === true || data?.reason === 'duplicate_report';
 }
 
 export function deliveryOf(answer) {
-  if (answer?.status === PROXY_REFUSED_REQUEST && answer.data?.recorded === false) {
-    return { verdict: REJECTED, reason: String(answer.data.error ?? 'proxy_rejected'), status: PROXY_REFUSED_REQUEST };
-  }
+  const data = answer?.data;
+  const status = data?.status ?? answer?.status;
+  if (data?.terminal === true && !(status >= SERVER_ERROR)) return rejectionOf(data.reason ?? data.error, status);
+  if (answer?.status === PROXY_REFUSED_REQUEST && data?.recorded === false) return rejectionOf(data.error ?? 'proxy_rejected', PROXY_REFUSED_REQUEST);
   if (answer?.ok !== true) return { verdict: RETRY };
-  if (isRejection(answer.data)) {
-    return { verdict: REJECTED, reason: String(answer.data.reason ?? 'rejected'), ...(answer.data.status !== undefined && { status: answer.data.status }) };
-  }
-  return isTaken(answer.data) ? { verdict: SENT, receipt: receiptOf(answer.data) } : { verdict: RETRY };
+  if (REJECTED_BY_HUB.test(String(data?.reason ?? ''))) return rejectionOf(data.reason, data.status);
+  return isTaken(data) ? { verdict: SENT, receipt: receiptOf(data) } : { verdict: RETRY };
 }
 
 async function postReport(postReuseResult, report) {
@@ -109,11 +109,12 @@ async function postReport(postReuseResult, report) {
   }
 }
 
-export async function deliverPending(postReuseResult, outbox, now) {
+export async function deliverPending(postReuseResult, outbox, now, afterAttempt = () => {}) {
   let delivered = outbox;
   for (const [key, entry] of Object.entries(outbox)) {
     if (isSettled(entry)) continue;
     delivered = withAttempt(delivered, key, await postReport(postReuseResult, entry.report), now);
+    afterAttempt();
   }
   return delivered;
 }

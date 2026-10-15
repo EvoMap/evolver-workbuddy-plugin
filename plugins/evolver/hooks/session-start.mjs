@@ -30,7 +30,9 @@ function pendingClaimUrl() {
 
 function queueRetentionReports(sessionId, projectDir) {
   if (!sessionId) return;
-  queueReports(takeDueRetentions({ sessionId, projectDir }).flatMap(retentionReportsOf));
+  const { due, commit } = takeDueRetentions({ sessionId, projectDir });
+  queueReports(due.flatMap(retentionReportsOf));
+  commit();
 }
 
 function proxyNote({ isRunning, isStarting, url, outcome }) {

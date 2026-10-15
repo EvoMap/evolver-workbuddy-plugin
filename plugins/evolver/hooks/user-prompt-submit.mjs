@@ -9,7 +9,7 @@ import { queueReports } from '../lib/report-queue.mjs';
 import { correctionReportOf } from '../lib/reuse.mjs';
 import { readSession, writeSession } from '../lib/session-state.mjs';
 import { bestStrategy, formatStrategy, recalledAssets } from '../lib/strategy-recall.mjs';
-import { transcriptSize } from '../lib/transcript.mjs';
+import { transcriptMark } from '../lib/transcript.mjs';
 
 const MIN_PROMPT_CHARS = 8;
 const PROMPT_MAX_CHARS = 400;
@@ -42,7 +42,7 @@ async function recallByText(text) {
 }
 
 function startTurn(sessionId, input, previous) {
-  const session = { ...previous, turn: previous.turn + 1, turnStartOffset: transcriptSize(input.transcript_path), labelable: [] };
+  const session = { ...previous, turn: previous.turn + 1, turnStart: transcriptMark(input.transcript_path), labelable: [] };
   writeSession(sessionId, session);
   return session;
 }
@@ -61,9 +61,11 @@ async function recallContext(input) {
   const match = bestStrategy(await recallByText(text), new Set(Object.keys(session.injected)));
   if (!match) return '';
 
+  const latest = readSession(sessionId);
+  if (latest.injected[match.asset.asset_id]) return '';
   const injection = formatStrategy(match);
-  const injected = withInjected(session.injected, match.asset.asset_id, { turn: session.turn, strategyText: injection }, Date.now());
-  writeSession(sessionId, { ...session, injected });
+  const injected = withInjected(latest.injected, match.asset.asset_id, { turn: session.turn, strategyText: injection }, Date.now());
+  writeSession(sessionId, { ...latest, injected });
   return injection;
 }
 

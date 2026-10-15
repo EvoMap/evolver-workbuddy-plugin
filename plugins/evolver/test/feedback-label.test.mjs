@@ -18,3 +18,13 @@ test('a correction wins over politeness', () => {
 test('a new request carries no label', () => {
   for (const text of ['now add a logout button', '这个行不行？', '', undefined]) assert.equal(feedbackLabelOf(text), null, String(text));
 });
+
+test('a question about whether something fails is not a correction', () => {
+  for (const text of ['这个方案不行吗？', '这个结论不对吗？', '这样不对吧？', '不行 ?']) assert.equal(feedbackLabelOf(text), null, text);
+  for (const text of ['这样不行，换个办法', '完全不对。', '还是不行？']) assert.equal(feedbackLabelOf(text), 'correction', text);
+});
+
+test('a closing 吧 asks for an opinion, while 吧 mid-sentence still corrects', () => {
+  for (const text of ['这样不行吧', '这个结论不对吧。']) assert.equal(feedbackLabelOf(text), null, text);
+  assert.equal(feedbackLabelOf('不行吧，重来'), 'correction');
+});

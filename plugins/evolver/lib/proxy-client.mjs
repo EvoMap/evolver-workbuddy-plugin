@@ -6,8 +6,17 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 const STATUS_TIMEOUT_MS = 1500;
 const REPORT_TIMEOUT_MS = 8000;
 
+const DEFAULT_PORT = 19820;
+const MAX_PORT = 65535;
+
+export function fallbackProxyUrl() {
+  const raw = process.env.EVOMAP_PROXY_PORT ?? '';
+  const port = /^\d{1,5}$/.test(raw) && Number(raw) >= 1 && Number(raw) <= MAX_PORT ? Number(raw) : DEFAULT_PORT;
+  return `http://127.0.0.1:${port}`;
+}
+
 export function proxyConnection() {
-  const fallback = { url: `http://127.0.0.1:${process.env.EVOMAP_PROXY_PORT || '19820'}`, token: null, version: null };
+  const fallback = { url: fallbackProxyUrl(), token: null, version: null };
   try {
     const { proxy } = JSON.parse(readFileSync(join(homedir(), '.evolver', 'settings.json'), 'utf8'));
     const url = new URL(String(proxy.url));
@@ -26,6 +35,7 @@ async function proxyAnswer({ url, token }, method, path, { body, timeoutMs }) {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    redirect: 'error',
     signal: AbortSignal.timeout(timeoutMs)
   });
   const text = await res.text();

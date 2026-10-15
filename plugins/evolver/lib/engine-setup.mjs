@@ -1,10 +1,11 @@
 import { isOlderThan, meetsMinimum, nodeRunsEvolver } from './engine-version.mjs';
+import { withoutSecrets } from './redact.mjs';
 
 const RETRY_BASE_MS = 10 * 60 * 1000;
 const RETRY_MAX_MS = 24 * 60 * 60 * 1000;
 const OUTDATED_INSTALL_RETRY_MS = 6 * 60 * 60 * 1000;
 
-export const FAILURES = new Set(['node_unsupported', 'install_failed', 'start_failed']);
+export const FAILURES = new Set(['node_unsupported', 'install_failed', 'start_failed', 'setup_error']);
 
 export function isSetupDue(previous, now) {
   return !(previous?.retryAt > now);
@@ -41,16 +42,20 @@ async function engineToRun(runtime, previous, now) {
 
 async function proxyAfter(runtime, engine, action) {
   const ran = await engine.run(['lifecycle', action]);
-  const running = await runtime.waitForProxy();
+  const running = await runtime.waitForProxy(action === 'restart' ? (proxy) => !isOutdated(proxy) : undefined);
   return running ? { running } : { startError: ran.ok ? 'the Proxy did not answer within the wait' : ran.error };
 }
 
 async function ensureProxy(runtime, engine) {
   const running = await runtime.runningProxy();
   if (!running) return { action: 'started', ...(await proxyAfter(runtime, engine, 'start')) };
-  const isStale = !meetsMinimum(running.version) && meetsMinimum(engine.version) && running.version !== engine.version;
+  const isStale = isOutdated(running) && meetsMinimum(engine.version) && running.version !== engine.version;
   if (!isStale) return { running };
   return { action: 'restarted', ...(await proxyAfter(runtime, engine, 'restart')) };
+}
+
+function isOutdated(running) {
+  return !meetsMinimum(running?.version);
 }
 
 function retryDelay(failures) {
@@ -71,10 +76,14 @@ function settled(outcome, previous, now) {
 
 function statusOf({ installed, action, running, engine }) {
   if (!meetsMinimum(engine.version)) return 'outdated';
+  if (isOutdated(running)) return 'restart_needed';
   if (installed) return installed;
-  if (running && !meetsMinimum(running.version)) return 'restart_needed';
   if (action === 'started' || action === 'restarted') return action;
   return 'ready';
+}
+
+export function setupErrorOutcome(error, previous, now) {
+  return settled({ status: 'setup_error', error: withoutSecrets(String(error?.message ?? error)).slice(0, 300) }, previous, now);
 }
 
 export async function prepareEngine(runtime, previous) {

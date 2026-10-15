@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -27,9 +27,9 @@ const run = promisify(execFile);
 let sandbox;
 let proxy;
 
-async function startSession({ reuseAnswers } = {}) {
+async function startSession({ reuseAnswers, fetchDelaysMs } = {}) {
   sandbox = sandboxHome();
-  proxy = await fakeProxy({ assets: [LRU_ASSET], reuseAnswers });
+  proxy = await fakeProxy({ assets: [LRU_ASSET], reuseAnswers, fetchDelaysMs });
   writeProxySettings(sandbox.home, { url: proxy.url, version: '2.0.44' });
 }
 
@@ -221,4 +221,18 @@ test('the prompt loses keys and tokens before recall sends it', async () => {
   assert.equal(proxy.recalls.length, 1);
   assert.doesNotMatch(proxy.recalls[0].text, /ghp_abcdefghijklmnopqrstuvwxyz0123/);
   assert.match(proxy.recalls[0].text, /\[redacted\]/);
+});
+
+test('a slow recall for an earlier prompt neither rolls the session back nor injects twice', async () => {
+  await startSession({ fetchDelaysMs: [1500, 0] });
+  const s = session('s-overlap');
+  const slow = s.prompt('用 Node 写一个 LRU cache，带 get/set 和淘汰');
+  await waitFor(() => proxy.recalls.length === 1);
+  const fast = await s.prompt('再写一个 LRU cache 的测试，覆盖淘汰顺序');
+  const late = await slow;
+  const injections = [fast, late].filter((output) => output.hookSpecificOutput);
+  assert.equal(injections.length, 1);
+  const stored = JSON.parse(readFileSync(join(sandbox.data, readdirSync(sandbox.data).find((name) => name.startsWith('session-'))), 'utf8'));
+  assert.equal(stored.turn, 2);
+  assert.deepEqual(Object.keys(stored.injected), [ASSET_ID]);
 });

@@ -36,7 +36,7 @@ function readBody(req) {
   });
 }
 
-export async function fakeProxy({ assets = [], reuseAnswers = [] } = {}) {
+export async function fakeProxy({ assets = [], reuseAnswers = [], fetchDelaysMs = [] } = {}) {
   const posts = [];
   const recalls = [];
   const answers = [...reuseAnswers];
@@ -49,7 +49,9 @@ export async function fakeProxy({ assets = [], reuseAnswers = [] } = {}) {
     if (req.headers.authorization !== `Bearer ${TOKEN}`) return reply(401, { error: 'unauthorized' });
     if (req.method === 'GET' && req.url === '/proxy/status') return reply(200, { running: true, status: 'running' });
     if (req.url === '/asset/fetch') {
+      const delay = fetchDelaysMs[recalls.length] ?? 0;
       recalls.push(body);
+      await new Promise((resolve) => setTimeout(resolve, delay));
       return reply(200, { assets });
     }
     if (req.url === '/asset/reuse-result') {
