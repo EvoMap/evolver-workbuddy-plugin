@@ -15,3 +15,9 @@ test('a prerelease sorts below its release', () => {
   assert.equal(isOlderThan('2.0.44-rc.1', '2.0.44'), true);
   assert.equal(isOlderThan('2.0.44', '2.0.44-rc.1'), false);
 });
+
+test('prereleases of the same version sort by their identifiers', () => {
+  assert.equal(isOlderThan('2.0.44-beta.2', '2.0.44-beta.10'), true);
+  assert.equal(isOlderThan('2.0.44-beta.10', '2.0.44-beta.2'), false);
+  assert.equal(isOlderThan('2.0.44-beta.1', '2.0.44-rc.1'), true);
+});

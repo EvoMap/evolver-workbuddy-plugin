@@ -98,7 +98,7 @@ async function waitForProxy(deadlineMs, isWanted) {
   const deadline = Date.now() + deadlineMs;
   let seen = null;
   while (Date.now() < deadline) {
-    seen = (await runningProxy()) ?? seen;
+    seen = await runningProxy();
     if (seen && isWanted(seen)) return seen;
     await new Promise((resolve) => setTimeout(resolve, PROXY_POLL_MS));
   }

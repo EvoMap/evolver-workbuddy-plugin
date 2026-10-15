@@ -4,8 +4,8 @@
 // counts every report and there is no way to take one back.
 //
 // Questions are the trap this has to survive: `行不行`, `对不对`, `不行吗` and
-// `不对吧？` ask for an opinion and contain `不行` and `不对` verbatim.
-const ASKS_FOR_OPINION = /\s*(?:[吗嘛么]|吧?\s*[?？])/;
+// a closing `不对吧` ask for an opinion and contain `不行` and `不对` verbatim.
+const ASKS_FOR_OPINION = /\s*(?:[吗嘛么]|吧?\s*[?？]|吧\s*[。.!！~～]*\s*$)/;
 const CORRECTION_PATTERNS = [
   new RegExp(`(?<!行)不行(?!不)(?!${ASKS_FOR_OPINION.source})`),
   new RegExp(`(?<!对)不对(?!不)(?!${ASKS_FOR_OPINION.source})`),

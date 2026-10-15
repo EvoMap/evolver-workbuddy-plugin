@@ -34,7 +34,7 @@ export function runHook(eventName, handle) {
   };
   const startedAt = Date.now();
   const watchdog = () => {
-    const isReady = buffer.trim() === '' || parsedInput(buffer) !== null || Date.now() - startedAt >= STDIN_MAX_WAIT_MS;
+    const isReady = buffer === '' || parsedInput(buffer) !== null || Date.now() - startedAt >= STDIN_MAX_WAIT_MS;
     if (isReady) start();
     else setTimeout(watchdog, STDIN_WATCHDOG_MS).unref();
   };

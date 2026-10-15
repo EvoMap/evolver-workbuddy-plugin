@@ -24,3 +24,7 @@ test('a quoted secret is redacted whole, spaces included', () => {
 test('code identifiers that merely end in a secret word are left alone', () => {
   for (const text of ['const cancellationToken = controller.signal;', 'resetPassword = buildResetFlow(user)']) assert.equal(withoutSecrets(text), text);
 });
+
+test('a secret behind an unclosed quote is still redacted', () => {
+  for (const text of ['API_KEY="abcdef123456', "TOKEN='abcdef123456"]) assert.doesNotMatch(withoutSecrets(text), /abcdef123456/, text);
+});

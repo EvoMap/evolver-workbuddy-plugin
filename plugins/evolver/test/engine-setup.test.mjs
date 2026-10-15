@@ -162,5 +162,6 @@ test('a running Proxy that does not report its version is not taken as new enoug
 test('an unexpected error during setup is recorded as a failure and backed off', async () => {
   const outcome = setupErrorOutcome(new Error('EACCES: permission denied, mkdir'), { failures: 1 }, NOW);
   assert.deepEqual(outcome, { status: 'setup_error', error: 'EACCES: permission denied, mkdir', at: NOW, failures: 2, retryAt: NOW + 20 * MINUTE });
+  assert.doesNotMatch(setupErrorOutcome(new Error('npm ERR! 401 token=npm_abcdefghijklmnop'), null, NOW).error, /npm_abcdefghijklmnop/);
   assert.match(engineNoticeOf(outcome), /stopped on an unexpected error \(EACCES: permission denied, mkdir\)/);
 });

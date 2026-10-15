@@ -38,3 +38,9 @@ test('a complete payload on a stdin the host keeps open is answered on the first
   assert.equal(code, 0);
   assert.ok(elapsedMs < 2500, `answered after ${elapsedMs}ms`);
 });
+
+test('whitespace that arrives ahead of the payload is not taken for an empty input', async () => {
+  const { code, stdout } = await hookWithOpenStdin('   \n');
+  assert.equal(code, 0);
+  assert.ok(JSON.parse(stdout));
+});

@@ -1,4 +1,5 @@
 import { isOlderThan, meetsMinimum, nodeRunsEvolver } from './engine-version.mjs';
+import { withoutSecrets } from './redact.mjs';
 
 const RETRY_BASE_MS = 10 * 60 * 1000;
 const RETRY_MAX_MS = 24 * 60 * 60 * 1000;
@@ -82,7 +83,7 @@ function statusOf({ installed, action, running, engine }) {
 }
 
 export function setupErrorOutcome(error, previous, now) {
-  return settled({ status: 'setup_error', error: String(error?.message ?? error).slice(0, 300) }, previous, now);
+  return settled({ status: 'setup_error', error: withoutSecrets(String(error?.message ?? error)).slice(0, 300) }, previous, now);
 }
 
 export async function prepareEngine(runtime, previous) {

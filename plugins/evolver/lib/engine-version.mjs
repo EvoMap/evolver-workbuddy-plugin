@@ -5,8 +5,13 @@ export function versionOf(text) {
   return match ? match.slice(1, 4).join('.') : null;
 }
 
-function isPrerelease(version) {
-  return /\d+\.\d+\.\d+-/.test(String(version ?? ''));
+function prereleaseOf(version) {
+  return /\d+\.\d+\.\d+-([0-9A-Za-z.-]+)/.exec(String(version ?? ''))?.[1] ?? null;
+}
+
+function isOlderPrerelease(have, need) {
+  if (have === null || need === null) return have !== null && need === null;
+  return have.localeCompare(need, 'en', { numeric: true }) < 0;
 }
 
 export function isOlderThan(version, minimum) {
@@ -16,7 +21,7 @@ export function isOlderThan(version, minimum) {
   for (let index = 0; index < 3; index += 1) {
     if (have[index] !== need[index]) return have[index] < need[index];
   }
-  return isPrerelease(version) && !isPrerelease(minimum);
+  return isOlderPrerelease(prereleaseOf(version), prereleaseOf(minimum));
 }
 
 export function meetsMinimum(version) {
