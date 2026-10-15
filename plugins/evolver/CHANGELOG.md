@@ -44,12 +44,17 @@ This project follows Semantic Versioning.
   whose restart leaves the old Proxy running reports `restart_needed`; an
   unexpected setup error is recorded and backed off instead of retried at
   every session, and no longer stops the report drain.
-- A transcript rewritten since the prompt is read from the last user message.
+- A transcript rewritten since the prompt (checked by a fingerprint of the
+  bytes before the turn's start) is read from the last user message.
 - Overlapping prompts in one session no longer roll the session back or inject
   the same strategy twice.
 - Environment-style secret names (`OPENAI_API_KEY=…`) are redacted before
   recall.
-- The hook stdin watchdog waits for a payload that is still arriving.
+- The hook stdin watchdog waits up to 3s for a payload that is still arriving,
+  then answers anyway.
+- A running Proxy that reports no version is not taken as meeting the minimum.
+- Quoted multi-word secrets are redacted whole; camelCase identifiers such as
+  `cancellationToken` are left alone.
 
 ### Changed
 - `evolver_asset_reuse_result` sends self-reported `L5` evidence.
