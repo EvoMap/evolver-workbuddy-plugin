@@ -19,6 +19,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 
+import { fallbackProxyUrl } from '../lib/proxy-client.mjs';
+
 const SERVER = { name: 'evolver-proxy', version: '0.2.0' };
 const DEFAULT_PROTOCOL = '2025-06-18';
 
@@ -26,9 +28,6 @@ function log(...a) {
   process.stderr.write('[evolver-proxy-mcp] ' + a.join(' ') + '\n');
 }
 
-function defaultProxyUrl() {
-  return `http://127.0.0.1:${process.env.EVOMAP_PROXY_PORT || '19820'}`;
-}
 
 function isLoopbackHost(hostname) {
   const value = String(hostname || '').toLowerCase();
@@ -71,7 +70,7 @@ function readProxySettings() {
     // Not running / unreadable: fall through to default local URL.
   }
   if (!url) {
-    url = defaultProxyUrl();
+    url = fallbackProxyUrl();
     token = null;
   }
   return { url, token };
@@ -89,6 +88,7 @@ async function proxyFetch(method, path, body) {
       method,
       headers: Object.keys(headers).length ? headers : undefined,
       body: body ? JSON.stringify(body) : undefined,
+      redirect: 'error',
       signal: ctrl.signal
     });
     const text = await res.text();

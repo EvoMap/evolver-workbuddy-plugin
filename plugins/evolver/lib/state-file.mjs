@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const LOCK_STALE_MS = 2 * 60 * 1000;
+const CLAIM_STALE_MS = 60 * 1000;
 
 export function stateDir() {
   return process.env.CODEBUDDY_PLUGIN_DATA || path.join(os.homedir(), '.evolver', 'workbuddy-hooks');
@@ -49,16 +50,8 @@ export function appendStateLine(target, value) {
   fs.appendFileSync(target, `${JSON.stringify(value)}\n`, { mode: 0o600 });
 }
 
-export function takeStateLines(target) {
-  const taken = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.taking`;
-  try {
-    fs.renameSync(target, taken);
-  } catch {
-    return [];
-  }
-  const text = fs.readFileSync(taken, 'utf8');
-  fs.rmSync(taken, { force: true });
-  return text.split('\n').flatMap((line) => {
+function linesOf(file) {
+  return fs.readFileSync(file, 'utf8').split('\n').flatMap((line) => {
     try {
       return line ? [JSON.parse(line)] : [];
     } catch {
@@ -67,9 +60,53 @@ export function takeStateLines(target) {
   });
 }
 
+function staleClaimsOf(target, now) {
+  const prefix = `${path.basename(target)}.`;
+  try {
+    return fs.readdirSync(path.dirname(target))
+      .filter((name) => name.startsWith(prefix) && name.endsWith('.taking'))
+      .map((name) => path.join(path.dirname(target), name))
+      .filter((file) => now - fs.statSync(file).mtimeMs > CLAIM_STALE_MS);
+  } catch {
+    return [];
+  }
+}
+
+function claimed(source, target) {
+  const claim = `${target}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.taking`;
+  try {
+    fs.renameSync(source, claim);
+    fs.utimesSync(claim, new Date(), new Date());
+    return claim;
+  } catch {
+    return null;
+  }
+}
+
+// Lines move into a claim file that is deleted only on commit, so a process
+// that dies between taking and persisting them leaves the claim behind for
+// the next taker to pick up once it is stale.
+export function takeStateLines(target, now = Date.now()) {
+  const claims = [...staleClaimsOf(target, now), target].map((source) => claimed(source, target)).filter(Boolean);
+  return {
+    lines: claims.flatMap(linesOf),
+    commit: () => {
+      for (const claim of claims) fs.rmSync(claim, { force: true });
+    },
+  };
+}
+
 function isStale(lockDir, now) {
   try {
     return now - fs.statSync(lockDir).mtimeMs > LOCK_STALE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function ownsLock(lockDir, token) {
+  try {
+    return fs.readFileSync(path.join(lockDir, 'owner'), 'utf8') === token;
   } catch {
     return false;
   }
@@ -84,9 +121,15 @@ export function tryLock(name, now = Date.now()) {
   } catch {
     return null;
   }
+  const token = crypto.randomBytes(12).toString('hex');
+  fs.writeFileSync(path.join(lockDir, 'owner'), token);
   return {
-    refresh: () => fs.utimesSync(lockDir, new Date(), new Date()),
-    release: () => fs.rmSync(lockDir, { recursive: true, force: true }),
+    refresh: () => {
+      if (ownsLock(lockDir, token)) fs.utimesSync(lockDir, new Date(), new Date());
+    },
+    release: () => {
+      if (ownsLock(lockDir, token)) fs.rmSync(lockDir, { recursive: true, force: true });
+    },
   };
 }
 

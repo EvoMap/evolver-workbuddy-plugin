@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { engineNoticeOf } from '../lib/engine-notice.mjs';
-import { isSetupDue, prepareEngine } from '../lib/engine-setup.mjs';
+import { isSetupDue, prepareEngine, setupErrorOutcome } from '../lib/engine-setup.mjs';
 
 const NOW = 1_800_000_000_000;
 const MINUTE = 60 * 1000;
@@ -141,4 +141,25 @@ test('a success clears earlier failures', async () => {
   const outcome = await prepareEngine(fakeRuntime(), { status: 'install_failed', failures: 3, retryAt: NOW - 1 });
   assert.equal(outcome.failures, 0);
   assert.equal(outcome.retryAt, undefined);
+});
+
+test('an upgrade whose restart leaves the old Proxy running asks for a restart instead of claiming success', async () => {
+  const runtime = fakeRuntime({ managed: '2.0.42', running: '2.0.42', startsProxy: false });
+  const outcome = await prepareEngine(runtime, null);
+  assert.equal(outcome.status, 'restart_needed');
+  assert.equal(outcome.previous, '2.0.42');
+});
+
+test('a running Proxy that does not report its version is not restarted', async () => {
+  const runtime = fakeRuntime({ managed: '2.0.44', running: null });
+  runtime.runningProxy = async () => ({ version: null });
+  const outcome = await prepareEngine(runtime, null);
+  assert.equal(outcome.status, 'ready');
+  assert.deepEqual(runtime.calls, []);
+});
+
+test('an unexpected error during setup is recorded as a failure and backed off', async () => {
+  const outcome = setupErrorOutcome(new Error('EACCES: permission denied, mkdir'), { failures: 1 }, NOW);
+  assert.deepEqual(outcome, { status: 'setup_error', error: 'EACCES: permission denied, mkdir', at: NOW, failures: 2, retryAt: NOW + 20 * MINUTE });
+  assert.match(engineNoticeOf(outcome), /stopped on an unexpected error \(EACCES: permission denied, mkdir\)/);
 });

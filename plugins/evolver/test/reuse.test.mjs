@@ -186,6 +186,18 @@ for (const answer of [
   });
 }
 
+test('a terminal answer is a rejection whatever its HTTP status', () => {
+  assert.deepEqual(deliveryOf({ ok: false, status: 422, data: { recorded: false, terminal: true, reason: 'hub 422 invalid report' } }), {
+    verdict: 'rejected', reason: 'hub 422 invalid report', status: 422,
+  });
+});
+
+test('an answer that does not say it recorded the report is retried', () => {
+  for (const data of [undefined, {}, { raw: '<html>' }, { recorded: 'yes' }]) {
+    assert.deepEqual(deliveryOf({ ok: true, status: 200, data }), { verdict: 'retry' }, JSON.stringify(data));
+  }
+});
+
 test('the status a newer Proxy passes through is kept with the rejection', () => {
   assert.deepEqual(deliveryOf({ ok: true, status: 200, data: { recorded: false, terminal: true, reason: 'bad evidence', status: 400 } }), {
     verdict: 'rejected', reason: 'bad evidence', status: 400,

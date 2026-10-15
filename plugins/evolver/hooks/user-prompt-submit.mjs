@@ -61,9 +61,11 @@ async function recallContext(input) {
   const match = bestStrategy(await recallByText(text), new Set(Object.keys(session.injected)));
   if (!match) return '';
 
+  const latest = readSession(sessionId);
+  if (latest.injected[match.asset.asset_id]) return '';
   const injection = formatStrategy(match);
-  const injected = withInjected(session.injected, match.asset.asset_id, { turn: session.turn, strategyText: injection }, Date.now());
-  writeSession(sessionId, { ...session, injected });
+  const injected = withInjected(latest.injected, match.asset.asset_id, { turn: session.turn, strategyText: injection }, Date.now());
+  writeSession(sessionId, { ...latest, injected });
   return injection;
 }
 

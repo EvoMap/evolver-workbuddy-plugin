@@ -29,16 +29,17 @@ function reportsOf(sessionId, session, turn) {
 
 function closeTurn(input) {
   const sessionId = input.session_id;
-  const editedBefore = takeFilesBefore(sessionId);
+  const { editedBefore, commit } = takeFilesBefore(sessionId);
   const session = readSession(sessionId);
   const reports = reportsOf(sessionId, session, finishedTurnOf(input, session));
-  if (reports.length === 0) return;
+  if (reports.length === 0) return commit();
 
   const reuses = reports.map(reportedReuseOf);
+  queueReports(reports.map((report) => ({ report, sessionId })));
   const injected = withReported(session.injected, reports.map((report) => report.asset_id), Date.now());
   writeSession(sessionId, { ...session, injected, labelable: reuses });
-  queueReports(reports.map((report) => ({ report, sessionId })));
   rememberForRetention({ sessionId, projectDir: projectDirOf(input), reuses, editedBefore });
+  commit();
   startInBackground([DRAIN_TASK]);
 }
 

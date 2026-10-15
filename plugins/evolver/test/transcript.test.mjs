@@ -92,6 +92,18 @@ test('only records after the turn offset are read, and a shrunken transcript fal
   assert.deepEqual(turnActivityOf(turnRecordsSince(compacted, offset + 10_000)), { commands: [], paths: [], edits: [], checks: [], answer: 'answer' });
 });
 
+test('a transcript rewritten past the old offset is read from the last prompt, not from the stale offset', () => {
+  const line = (record) => `${JSON.stringify(record)}\n`;
+  const file = transcriptWith(line({ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'an earlier prompt with some length' }] }));
+  const staleOffset = transcriptSize(file) - 7;
+  writeFileSync(file, [
+    line({ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'new' }] }),
+    ...bashRecords('npm test', shellText('npm test', 'ℹ fail 0', 0)).map(line),
+  ].join(''));
+  assert.ok(transcriptSize(file) > staleOffset);
+  assert.deepEqual(turnActivityOf(turnRecordsSince(file, staleOffset)).commands, ['npm test']);
+});
+
 test('a missing or partly written transcript reads as an empty turn', () => {
   assert.deepEqual(turnRecordsSince('', 0), []);
   assert.deepEqual(turnRecordsSince(join(tmpdir(), 'no-such-transcript.jsonl'), 0), []);

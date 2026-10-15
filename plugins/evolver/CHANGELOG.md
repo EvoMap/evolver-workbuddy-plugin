@@ -27,6 +27,30 @@ This project follows Semantic Versioning.
 - `/evolver-status` shows the engine setup and the latest report deliveries
   (`eligible`, `counted`, `weight`) and rejections.
 
+### Fixed
+- `EVOMAP_PROXY_PORT` must be a port number (1–65535); anything else falls back
+  to 19820, so it can no longer point the Proxy URL at another host. Proxy
+  requests refuse redirects.
+- A test summary like `1 failed, 0 errors` reads as a failure; only zero
+  counts are ignored.
+- Questions such as `这个方案不行吗？` are no longer sent as corrections.
+- A report counts as delivered only on `recorded: true` or `duplicate_report`;
+  a `terminal: true` answer is rejected whatever its HTTP status.
+- Stop queues reports before marking them reported; queue, retention and
+  edit files are claimed until committed and recovered after a crash; locks
+  carry an owner token; the report drain refreshes its lock after every
+  attempt and merges only what it attempted.
+- A prerelease of the minimum Evolver version does not satisfy it; an upgrade
+  whose restart leaves the old Proxy running reports `restart_needed`; an
+  unexpected setup error is recorded and backed off instead of retried at
+  every session, and no longer stops the report drain.
+- A transcript rewritten since the prompt is read from the last user message.
+- Overlapping prompts in one session no longer roll the session back or inject
+  the same strategy twice.
+- Environment-style secret names (`OPENAI_API_KEY=…`) are redacted before
+  recall.
+- The hook stdin watchdog waits for a payload that is still arriving.
+
 ### Changed
 - `evolver_asset_reuse_result` sends self-reported `L5` evidence.
 - `scripts/evolver-status.js` became `scripts/evolver-status.mjs`; the injection

@@ -9,6 +9,7 @@ const TURN_EDITED_MAX_CHARS = 200_000;
 const CHECK_COMMAND_MAX_CHARS = 200;
 const EXIT_CODE = /^Exit Code: (-?\d+)/m;
 const TOOL_ERROR = /^\s*(?:Error\b|<tool_use_error>)/;
+const NEWLINE = 0x0a;
 
 export function transcriptSize(transcriptPath) {
   try {
@@ -47,9 +48,25 @@ function afterLastUserMessage(records) {
   return records.slice(last + 1);
 }
 
+function startsALine(transcriptPath, offset) {
+  if (offset === 0) return true;
+  const byte = Buffer.alloc(1);
+  const fd = openSync(transcriptPath, 'r');
+  try {
+    return readSync(fd, byte, 0, 1, offset - 1) === 1 && byte[0] === NEWLINE;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+// The offset was taken when the prompt was submitted; a transcript that has
+// since been rewritten no longer has a line boundary there, so the turn is
+// found again from the last user message instead.
 export function turnRecordsSince(transcriptPath, offset) {
-  if (!transcriptPath) return [];
-  if (transcriptSize(transcriptPath) < offset) return afterLastUserMessage(recordsOf(textFrom(0, transcriptPath)));
+  if (!transcriptPath || transcriptSize(transcriptPath) === 0) return [];
+  if (transcriptSize(transcriptPath) < offset || !startsALine(transcriptPath, offset)) {
+    return afterLastUserMessage(recordsOf(textFrom(0, transcriptPath)));
+  }
   return recordsOf(textFrom(offset, transcriptPath));
 }
 

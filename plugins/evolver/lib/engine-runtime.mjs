@@ -94,14 +94,15 @@ async function runningProxy() {
   return (await proxyStatus(connection)) ? { version: connection.version } : null;
 }
 
-async function waitForProxy(deadlineMs = PROXY_WAIT_MS) {
+async function waitForProxy(deadlineMs, isWanted) {
   const deadline = Date.now() + deadlineMs;
+  let seen = null;
   while (Date.now() < deadline) {
-    const running = await runningProxy();
-    if (running) return running;
+    seen = (await runningProxy()) ?? seen;
+    if (seen && isWanted(seen)) return seen;
     await new Promise((resolve) => setTimeout(resolve, PROXY_POLL_MS));
   }
-  return null;
+  return seen;
 }
 
 export function engineRuntime({ prefix = engineDir(), npm = defaultNpmCommand(), proxyWaitMs = PROXY_WAIT_MS } = {}) {
@@ -111,7 +112,7 @@ export function engineRuntime({ prefix = engineDir(), npm = defaultNpmCommand(),
     managedEngine: async () => managedEngineAt(prefix),
     pathEngine,
     runningProxy,
-    waitForProxy: () => waitForProxy(proxyWaitMs),
+    waitForProxy: (isWanted = () => true) => waitForProxy(proxyWaitMs, isWanted),
     installLatest: () => {
       fs.mkdirSync(prefix, { recursive: true });
       const args = [...npm.args, 'install', '--prefix', prefix, '--no-audit', '--no-fund', '--loglevel=error', `${PACKAGE}@latest`];

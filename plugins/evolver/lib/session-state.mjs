@@ -23,11 +23,12 @@ export function noteFileBefore(sessionId, file, hash) {
 }
 
 export function takeFilesBefore(sessionId) {
+  const { lines, commit } = takeStateLines(editsPath(sessionId));
   const editedBefore = new Map();
-  for (const { path: file, before } of takeStateLines(editsPath(sessionId))) {
+  for (const { path: file, before } of lines) {
     if (typeof file === 'string' && !editedBefore.has(file)) editedBefore.set(file, before);
   }
-  return editedBefore;
+  return { editedBefore, commit };
 }
 
 export function pruneOldSessions(now = Date.now()) {

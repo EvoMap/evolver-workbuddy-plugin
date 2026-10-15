@@ -5,6 +5,10 @@ export function versionOf(text) {
   return match ? match.slice(1, 4).join('.') : null;
 }
 
+function isPrerelease(version) {
+  return /\d+\.\d+\.\d+-/.test(String(version ?? ''));
+}
+
 export function isOlderThan(version, minimum) {
   const have = versionOf(version)?.split('.').map(Number);
   const need = versionOf(minimum)?.split('.').map(Number);
@@ -12,7 +16,7 @@ export function isOlderThan(version, minimum) {
   for (let index = 0; index < 3; index += 1) {
     if (have[index] !== need[index]) return have[index] < need[index];
   }
-  return false;
+  return isPrerelease(version) && !isPrerelease(minimum);
 }
 
 export function meetsMinimum(version) {
