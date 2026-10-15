@@ -93,7 +93,8 @@ function isTaken(data) {
 
 export function deliveryOf(answer) {
   const data = answer?.data;
-  if (data?.terminal === true && !(answer.status >= SERVER_ERROR)) return rejectionOf(data.reason ?? data.error, data.status ?? answer.status);
+  const status = data?.status ?? answer?.status;
+  if (data?.terminal === true && !(status >= SERVER_ERROR)) return rejectionOf(data.reason ?? data.error, status);
   if (answer?.status === PROXY_REFUSED_REQUEST && data?.recorded === false) return rejectionOf(data.error ?? 'proxy_rejected', PROXY_REFUSED_REQUEST);
   if (answer?.ok !== true) return { verdict: RETRY };
   if (REJECTED_BY_HUB.test(String(data?.reason ?? ''))) return rejectionOf(data.reason, data.status);

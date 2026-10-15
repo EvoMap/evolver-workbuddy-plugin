@@ -194,6 +194,7 @@ test('a terminal answer is a rejection whatever its HTTP status', () => {
 
 test('a terminal flag on a server error is retried, not rejected', () => {
   assert.deepEqual(deliveryOf({ ok: false, status: 503, data: { terminal: true, reason: 'hub 503' } }), { verdict: 'retry' });
+  assert.deepEqual(deliveryOf({ ok: true, status: 200, data: { recorded: false, terminal: true, reason: 'hub 502', status: 502 } }), { verdict: 'retry' });
 });
 
 test('an answer that does not say it recorded the report is retried', () => {
