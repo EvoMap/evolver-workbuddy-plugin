@@ -120,13 +120,14 @@ Every strategy the plugin injects is reported once per turn as `{asset_id, outco
 - Delivery goes through a queue that a detached worker drains, retried at every turn end and session start for 8 days. A Hub answer of `recorded`, `duplicate_report`, or `eligible: false` (`same_owner`, `daily_cap`) is final; `terminal: true`, `hub 400`, `hub 422` or a Proxy validation 400 is settled as rejected; `hub 404`, 5xx, 401/403/429, timeouts and an unreachable Proxy are retried.
 - Evolver 2.0.44 or newer forwards `evidence` and returns `eligible` / `counted` / `weight`; an older Proxy drops the evidence and the reports still count as plain reuse reports.
 
-State lives in `${CODEBUDDY_PLUGIN_DATA}` (fallback `~/.evolver/workbuddy-hooks/`): `session-<hash>.json` (turn counter, the turn's prompt without secrets, injected strategies, last turn's reuses), `edits-<hash>.jsonl`, `reports-queue.jsonl`, `reports-outbox.json`, `retention-pending.jsonl`, `engine.json`. Session files are removed after 8 days. Every read-modify-write of a session file or the candidate file runs under an exclusive lock (`<file>.lock`, holding the owner's pid and a token): a dead owner's lock is taken over, and one that cannot be had within 2 seconds is given up on and the write runs unguarded.
+State lives in `${CODEBUDDY_PLUGIN_DATA}` (fallback `~/.evolver/workbuddy-hooks/`): `session-<hash>.json` (turn counter, the turn's prompt without secrets, injected strategies, last turn's reuses), `edits-<hash>.jsonl`, `reports-queue.jsonl`, `reports-outbox.json`, `retention-pending.jsonl`, `engine.json`, `workbuddy-distill-pending.json`. A session start moves a `workbuddy-distill-pending.json` an earlier build left in `~/.evolver/state/` in here (a candidate already here wins). Session files are removed after 8 days. Every read-modify-write of a session file or the candidate file runs under an exclusive lock (`<file>.lock`, holding the owner's pid and a token): a dead owner's lock is taken over, and one that cannot be had within 2 seconds is given up on and the write runs unguarded.
 
 ## Session-end distillation
 
 A turn that ended completed, used tools, passed its last check and reused no injected strategy leaves a
-candidate in `~/.evolver/state/workbuddy-distill-pending.json` (apart from other hosts' candidates, which run on
-another model); a later verified turn replaces it, and a next prompt that reads as a correction drops it. When
+candidate in `${CODEBUDDY_PLUGIN_DATA}/workbuddy-distill-pending.json` (apart from other hosts' candidates, which
+run on another model; not in `~/.evolver`, which WorkBuddy's sandbox keeps `/evolver-*` commands from writing);
+a later verified turn replaces it, and a next prompt that reads as a correction drops it. When
 the session ends (SessionEnd hook), the candidate is marked closed and a detached worker writes a Gene from a
 digest of that turn (task, commands, touched paths, checks, final answer — never the whole history) with one
 headless call to the session's own model, then sends it to the Proxy's `POST /conversation/distill` with

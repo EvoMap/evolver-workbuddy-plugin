@@ -10,6 +10,7 @@ import { projectDirOf } from '../lib/project-dir.mjs';
 import { proxyConnection, proxyStatus } from '../lib/proxy-client.mjs';
 import { queueReports } from '../lib/report-queue.mjs';
 import { retentionReportsOf, takeDueRetentions } from '../lib/retention-pending.mjs';
+import { migrateLegacyCandidates } from '../lib/session-distill.mjs';
 import { abortedReports } from '../lib/turn-end.mjs';
 
 function queueRetentionReports(sessionId, projectDir) {
@@ -35,6 +36,7 @@ async function sessionContext(input) {
   const needsEngine = !isRunning || !meetsMinimum(connection.version);
   const isStarting = needsEngine && isSetupDue(outcome, Date.now());
 
+  migrateLegacyCandidates();
   queueRetentionReports(input.session_id, projectDirOf(input));
   queueReports(abortedReports(takeOrphanedUnreported()));
   startInBackground([...(isStarting ? [ENGINE_TASK] : []), DRAIN_TASK, DISTILL_TASK]);

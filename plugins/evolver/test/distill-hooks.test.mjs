@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { appendFileSync, copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +66,7 @@ function session(id) {
   };
 }
 
-const pendingPath = () => join(sandbox.home, '.evolver', 'state', 'workbuddy-distill-pending.json');
+const pendingPath = () => join(sandbox.data, 'workbuddy-distill-pending.json');
 
 function pending() {
   try {
@@ -292,7 +292,8 @@ function runDistillScript(args, sessionId, input, env = {}) {
 
 function shellRun(command) {
   return new Promise((resolve) => {
-    const env = { ...sandbox.env, PATH: `${dirname(process.execPath)}${delimiter}${sandbox.env.PATH}` };
+    const { CODEBUDDY_PLUGIN_DATA, ...agentEnv } = sandbox.env;
+    const env = { ...agentEnv, PATH: `${dirname(process.execPath)}${delimiter}${sandbox.env.PATH}` };
     execFile('/bin/sh', ['-c', command], { env }, (error, stdout) => resolve({ status: error?.code ?? 0, stdout }));
   });
 }
@@ -326,4 +327,17 @@ test('an agent Gene that is no JSON object is refused and the candidate stays', 
   assert.match(refused.stdout, /one JSON object/);
   assert.equal(proxy.distills.length, 0);
   assert.equal(pending()['s-bad'].attempts, 0);
+});
+
+test("a session start moves an earlier build's candidates from ~/.evolver/state into the plugin data folder", async () => {
+  await startSandbox();
+  const legacy = join(sandbox.home, '.evolver', 'state', 'workbuddy-distill-pending.json');
+  mkdirSync(join(sandbox.home, '.evolver', 'state'), { recursive: true });
+  const live = { pid: process.pid };
+  writeFileSync(legacy, JSON.stringify({ 's-old': { ...live, prompt: 'old', at: 1 }, 's-both': { ...live, prompt: 'stale', at: 1 } }));
+  writeFileSync(pendingPath(), JSON.stringify({ 's-both': { ...live, prompt: 'fresh', at: 2 } }));
+  await session('s-new').start();
+  assert.equal(existsSync(legacy), false);
+  assert.equal(pending()['s-old'].prompt, 'old');
+  assert.equal(pending()['s-both'].prompt, 'fresh');
 });

@@ -29,7 +29,10 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   the candidate no try; at session end it still does.
 - Session-end distillation. A turn that completed, used tools, passed its last
   check and reused no injected strategy leaves a candidate (secrets stripped) in
-  `~/.evolver/state/workbuddy-distill-pending.json`; a later verified turn
+  `${CODEBUDDY_PLUGIN_DATA}/workbuddy-distill-pending.json`, where WorkBuddy's
+  sandbox lets the `/evolver-*` commands write too (it keeps them from
+  `~/.evolver`); a session start moves one an earlier build left in
+  `~/.evolver/state/` there, merged under the same lock. A later verified turn
   replaces it and a correction drops it. The `SessionEnd` hook closes it and a
   detached worker distills it with one headless CodeBuddy CLI call on the
   turn's model (`codebuddy -p --tools "" --no-session-persistence

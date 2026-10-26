@@ -7,6 +7,7 @@ import { failure, shown, success } from '../lib/evolver-cli.mjs';
 import { headlessModel } from '../lib/headless-model.mjs';
 import { proxyFetch } from '../lib/proxy-client.mjs';
 import { distillPrompt, dueCandidates, needsAgentModel } from '../lib/session-distill.mjs';
+import { stateDir } from '../lib/state-file.mjs';
 
 const AGENT_MARK = 'EVOLVER: WRITE THE GENE YOURSELF';
 const POST_FLAG = '--post';
@@ -21,7 +22,8 @@ function headlessReason(outcome) {
 }
 
 // The headless CLI cannot sign in from inside the app, so the agent that ran the turn writes the Gene and
-// hands it back to this script, which posts it for the same candidate.
+// hands it back to this script, which posts it for the same candidate. The agent's shell carries neither the
+// session nor the plugin data folder, so the command names both.
 function agentInstructions(sessionId, candidate, focus, outcome) {
   const script = fileURLToPath(import.meta.url);
   return [
@@ -30,7 +32,7 @@ function agentInstructions(sessionId, candidate, focus, outcome) {
     'Write the Gene with your own model: answer the request below with the JSON object only, put it between the',
     'two marker lines of this command, run the command with your shell tool, and show the user what it prints.',
     '',
-    `CODEBUDDY_SESSION_ID=${shellQuoted(sessionId)} node ${shellQuoted(script)} ${POST_FLAG} <<'${GENE_END}'`,
+    `CODEBUDDY_SESSION_ID=${shellQuoted(sessionId)} CODEBUDDY_PLUGIN_DATA=${shellQuoted(stateDir())} node ${shellQuoted(script)} ${POST_FLAG} <<'${GENE_END}'`,
     '<the JSON object>',
     GENE_END,
     '',

@@ -16,10 +16,6 @@ export function statePath(name) {
   return path.join(stateDir(), name);
 }
 
-export function evolverStatePath(name) {
-  return path.join(os.homedir(), '.evolver', 'state', name);
-}
-
 export function sessionStatePath(prefix, sessionId, extension = 'json') {
   const digest = crypto.createHash('sha256').update(String(sessionId)).digest('hex').slice(0, 16);
   return statePath(`${prefix}-${digest}.${extension}`);

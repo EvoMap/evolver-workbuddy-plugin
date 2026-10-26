@@ -1,7 +1,11 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { eitherSignal } from './abort-signal.mjs';
 import { hostPid, ownerIsGone } from './process-owner.mjs';
 import { withoutSecrets } from './redact.mjs';
-import { evolverStatePath, readState, updateState } from './state-file.mjs';
+import { readState, removeState, statePath, updateState } from './state-file.mjs';
 
 // Distillation runs once a session, at its end, and outside the agent's conversation: each turn that
 // finished verified only leaves a candidate on disk, the latest one wins, and the session end (or, after a
@@ -19,8 +23,19 @@ const ARGUMENT_FIELDS = ['title', 'summary', ...LIST_FIELDS];
 const ITEM_NUMBER = /^\s*(?:\d+[.)]|[-*•])\s+/;
 const MAX_ATTEMPTS = 3;
 
-// Kept apart from dsh's and Claude Code's candidates: their sessions run on another host's model.
-const pendingPath = () => evolverStatePath('workbuddy-distill-pending.json');
+const PENDING_FILE = 'workbuddy-distill-pending.json';
+// In the plugin data folder, which WorkBuddy's sandbox lets commands write, unlike ~/.evolver; the name keeps
+// it apart from other hosts' candidates, whose sessions run on another model.
+const pendingPath = () => statePath(PENDING_FILE);
+const legacyPendingPath = () => path.join(os.homedir(), '.evolver', 'state', PENDING_FILE);
+
+/** Moves candidates an earlier build left in ~/.evolver/state into the plugin data folder; newer ones win. */
+export function migrateLegacyCandidates(legacy = legacyPendingPath()) {
+  if (!fs.existsSync(legacy)) return;
+  const moved = readState(legacy, {});
+  updateState(pendingPath(), {}, (pending) => ({ ...moved, ...pending }));
+  removeState(legacy);
+}
 
 /**
  * Why a finished turn leaves no candidate, or null when it does. A turn that reused an injected strategy
