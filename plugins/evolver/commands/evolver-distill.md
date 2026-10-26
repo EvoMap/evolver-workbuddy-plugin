@@ -3,7 +3,7 @@ description: "Distill this session's latest verified turn into a reusable Gene n
 argument-hint: "[optional focus]"
 ---
 
-!`node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-distill.mjs" <<'EVOLVER_ARGUMENTS'
+!`CODEBUDDY_PLUGIN_DATA="${CODEBUDDY_PLUGIN_DATA}" exec node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-distill.mjs" <<'EVOLVER_ARGUMENTS'
 $ARGUMENTS
 EVOLVER_ARGUMENTS`
 

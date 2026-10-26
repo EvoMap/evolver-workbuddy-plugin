@@ -3,7 +3,7 @@ description: "Sync assets between the local store and the EvoMap Hub (evolver sy
 argument-hint: "[--scope=…] [--type=…] [--dry-run]"
 ---
 
-!`node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-cli.mjs" sync <<'EVOLVER_ARGUMENTS'
+!`CODEBUDDY_PLUGIN_DATA="${CODEBUDDY_PLUGIN_DATA}" exec node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-cli.mjs" sync <<'EVOLVER_ARGUMENTS'
 $ARGUMENTS
 EVOLVER_ARGUMENTS`
 

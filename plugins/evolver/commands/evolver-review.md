@@ -3,7 +3,7 @@ description: "Review Evolver's pending evolved changes, then approve or reject t
 argument-hint: "[--approve | --reject]"
 ---
 
-!`node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-cli.mjs" review <<'EVOLVER_ARGUMENTS'
+!`CODEBUDDY_PLUGIN_DATA="${CODEBUDDY_PLUGIN_DATA}" exec node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-cli.mjs" review <<'EVOLVER_ARGUMENTS'
 $ARGUMENTS
 EVOLVER_ARGUMENTS`
 

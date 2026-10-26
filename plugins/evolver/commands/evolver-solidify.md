@@ -3,7 +3,7 @@ description: "Solidify the working changes into a durable Gene or Capsule (evolv
 argument-hint: "[--dry-run] [--intent=…] [--summary=…]"
 ---
 
-!`node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-cli.mjs" solidify <<'EVOLVER_ARGUMENTS'
+!`CODEBUDDY_PLUGIN_DATA="${CODEBUDDY_PLUGIN_DATA}" exec node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-cli.mjs" solidify <<'EVOLVER_ARGUMENTS'
 $ARGUMENTS
 EVOLVER_ARGUMENTS`
 

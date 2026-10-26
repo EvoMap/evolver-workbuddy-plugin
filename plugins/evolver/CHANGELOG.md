@@ -47,8 +47,11 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   `evolver review` through the plugin-managed engine, `evolver` or the pinned
   `npx -y @evomap/evolver@^2.0.44`) instead of asking the model to call tools.
   Each command runs one inline `` !`…` `` command with its arguments on stdin
-  through a quoted heredoc; `/evolver-*` turns are neither recalled for, read
-  as corrections, nor distilled.
+  through a quoted heredoc, `exec`ing the script so an argument line that ends
+  the heredoc early runs nothing after it, and with `CODEBUDDY_PLUGIN_DATA` set
+  from the host's load-time substitution, since the host's shell carries no
+  plugin's data folder; `/evolver-*` turns are neither recalled for, read as
+  corrections, nor distilled.
 - `updateState()`: every read-modify-write of a session file or the candidate
   file runs under an exclusive lock whose dead owner is taken over.
 - Automatic reuse reports. The turn-end hook reports every strategy the plugin

@@ -3,7 +3,7 @@ description: "Search the EvoMap network for reusable assets."
 argument-hint: "<task description or error text>"
 ---
 
-!`node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-search.mjs" <<'EVOLVER_ARGUMENTS'
+!`CODEBUDDY_PLUGIN_DATA="${CODEBUDDY_PLUGIN_DATA}" exec node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-search.mjs" <<'EVOLVER_ARGUMENTS'
 $ARGUMENTS
 EVOLVER_ARGUMENTS`
 

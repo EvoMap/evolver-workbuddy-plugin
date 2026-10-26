@@ -3,7 +3,7 @@ description: "Run one Evolver self-evolution cycle on this repository (evolver r
 argument-hint: "[--loop] [--dry-run] [--strategy=…]"
 ---
 
-!`node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-cli.mjs" run <<'EVOLVER_ARGUMENTS'
+!`CODEBUDDY_PLUGIN_DATA="${CODEBUDDY_PLUGIN_DATA}" exec node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-cli.mjs" run <<'EVOLVER_ARGUMENTS'
 $ARGUMENTS
 EVOLVER_ARGUMENTS`
 

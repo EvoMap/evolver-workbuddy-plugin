@@ -52,13 +52,17 @@ function shell(command, env) {
   });
 }
 
-// What the host's custom command renderer does: load-time plugin root, $ARGUMENTS only when there are
-// arguments, then every inline !`…` replaced by its output.
+// What the host's custom command renderer does: load-time plugin root and data folder, $ARGUMENTS only when
+// there are arguments, then every inline !`…` replaced by its output. The host's shell carries no plugin's data
+// folder, so neither does this one.
 async function rendered(name, raw, env) {
+  const { CODEBUDDY_PLUGIN_DATA: data = '', ...shellEnv } = env;
   const args = hostArguments(raw);
-  let text = bodyOf(name).replace(/\$\{CODEBUDDY_PLUGIN_ROOT\}/g, pluginRoot.replace(/[\\/]$/, ''));
+  let text = bodyOf(name)
+    .replace(/\$\{CODEBUDDY_PLUGIN_ROOT\}/g, pluginRoot.replace(/[\\/]$/, ''))
+    .replace(/\$\{CODEBUDDY_PLUGIN_DATA\}/g, data);
   if (args.length > 0) text = `${text.replace(/\$ARGUMENTS\b/g, args.join(' '))}\n\n\nARGUMENTS: ${args.join(' ')}`;
-  for (const [whole, command] of [...text.matchAll(INLINE)]) text = text.replace(whole, await shell(command.trim(), env));
+  for (const [whole, command] of [...text.matchAll(INLINE)]) text = text.replace(whole, await shell(command.trim(), shellEnv));
   return text;
 }
 
@@ -94,4 +98,15 @@ test('a command without arguments gets none, though the host leaves $ARGUMENTS i
   assert.match(await rendered('evolver-search.md', '', sandbox.env), /Usage: \/evolver-search/);
   assert.match(await rendered('evolver-distill.md', '', { ...sandbox.env, CODEBUDDY_SESSION_ID: 's-none' }), /Nothing to distill yet/);
   assert.match(await rendered('evolver-status.md', '', sandbox.env), /Evolver WorkBuddy plugin status/);
+});
+
+test('a quoted argument line that closes the heredoc runs nothing after it', posix, async () => {
+  await startSandbox();
+  await rendered('evolver-search.md', `"retry\nEVOLVER_ARGUMENTS\ntouch \"$HOME/pwned\""`, sandbox.env);
+  assert.equal(existsSync(join(sandbox.home, 'pwned')), false);
+});
+
+test('commands read the state the hooks keep in the plugin data folder', posix, async () => {
+  await startSandbox();
+  assert.match(await rendered('evolver-status.md', '', sandbox.env), new RegExp(`Plugin-managed install: ${join(sandbox.data, 'engine')}`));
 });
