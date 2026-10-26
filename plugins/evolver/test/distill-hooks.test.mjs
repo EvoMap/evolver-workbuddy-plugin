@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import { appendFileSync, copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -280,4 +280,50 @@ test('/evolver-distill leaves a candidate alone while a live process distills it
   assert.equal(result.status, 1);
   assert.match(result.stdout, /another process is distilling/);
   assert.deepEqual(cliRuns(), []);
+});
+
+function runDistillScript(args, sessionId, input, env = {}) {
+  const script = join(pluginRoot, 'scripts', 'evolver-distill.mjs');
+  return new Promise((resolve) => {
+    const child = execFile(process.execPath, [script, ...args], { env: { ...sandbox.env, CODEBUDDY_SESSION_ID: sessionId, ...env } }, (error, stdout) => resolve({ status: error?.code ?? 0, stdout }));
+    child.stdin.end(input);
+  });
+}
+
+function shellRun(command) {
+  return new Promise((resolve) => {
+    const env = { ...sandbox.env, PATH: `${dirname(process.execPath)}${delimiter}${sandbox.env.PATH}` };
+    execFile('/bin/sh', ['-c', command], { env }, (error, stdout) => resolve({ status: error?.code ?? 0, stdout }));
+  });
+}
+
+test('/evolver-distill hands the turn to the agent when the headless model cannot sign in, and posts its Gene', posix, async () => {
+  await startSandbox();
+  await verifiedTurn(session('s-agent'));
+  const handed = await runDistillScript([], 's-agent', 'the eviction order', { FAKE_CODEBUDDY_ANSWER: 'auth' });
+  assert.equal(handed.status, 0, handed.stdout);
+  assert.match(handed.stdout, /^EVOLVER: WRITE THE GENE YOURSELF\n.*Authentication required/);
+  assert.match(handed.stdout, /Focus on: the eviction order/);
+  assert.equal(proxy.distills.length, 0);
+  assert.equal(pending()['s-agent'].attempts, 0);
+  assert.equal(pending()['s-agent'].claimedBy, null);
+
+  const command = /^CODEBUDDY_SESSION_ID=.*\n<the JSON object>\nEVOLVER_GENE$/m.exec(handed.stdout)[0];
+  const gene = JSON.stringify({ title: 'LRU cache', summary: 'An LRU cache over a Map.', strategy: ['Keep a Map.', 'Re-insert on read.'] });
+  const posted = await shellRun(command.replace('<the JSON object>', gene));
+  assert.equal(posted.status, 0, posted.stdout);
+  assert.equal(proxy.distills.length, 1);
+  assert.equal(proxy.distills[0].summary, 'An LRU cache over a Map.');
+  assert.deepEqual(proxy.distills[0].strategy, ['Keep a Map.', 'Re-insert on read.']);
+  assert.equal(pending()['s-agent'], undefined);
+});
+
+test('an agent Gene that is no JSON object is refused and the candidate stays', posix, async () => {
+  await startSandbox();
+  await verifiedTurn(session('s-bad'));
+  const refused = await runDistillScript(['--post'], 's-bad', 'just prose');
+  assert.equal(refused.status, 1);
+  assert.match(refused.stdout, /one JSON object/);
+  assert.equal(proxy.distills.length, 0);
+  assert.equal(pending()['s-bad'].attempts, 0);
 });

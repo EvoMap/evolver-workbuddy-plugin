@@ -7,4 +7,4 @@ argument-hint: "[optional focus]"
 $ARGUMENTS
 EVOLVER_ARGUMENTS`
 
-Show the output above to the user as it is. Do not call any other tool or command for it.
+If the output above starts with `EVOLVER: WRITE THE GENE YOURSELF`, the headless model could not distill the turn: do what that output says, then show the user what its command printed. Otherwise show the output above to the user as it is, and do not call any other tool or command for it.

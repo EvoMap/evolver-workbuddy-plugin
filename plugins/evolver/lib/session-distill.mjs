@@ -134,14 +134,14 @@ export function claimLeftoverCandidates({ isGone = ownerIsGone, pid = process.pi
 }
 
 /**
- * Removes a candidate once it was distilled, or counts a failed try and gives up after MAX_ATTEMPTS. A
- * newer candidate the session wrote meanwhile is left alone.
+ * Removes a candidate once it was distilled, or counts a failed try and gives up after MAX_ATTEMPTS; a try
+ * that is not `counted` only releases the claim. A newer candidate the session wrote meanwhile is left alone.
  */
-export function settleCandidate(sessionId, candidate, { sent }) {
+export function settleCandidate(sessionId, candidate, { sent, counted = true }) {
   updateState(pendingPath(), {}, (pending) => {
     const current = pending[sessionId];
     if (!current || current.at !== candidate.at) return undefined;
-    const attempts = (current.attempts ?? 0) + 1;
+    const attempts = (current.attempts ?? 0) + (counted ? 1 : 0);
     if (sent || attempts >= MAX_ATTEMPTS) {
       const { [sessionId]: settled, ...rest } = pending;
       return rest;
@@ -228,8 +228,14 @@ export function distillBody(candidate, args, usage) {
 export async function distillCandidate({ proxyFetch, complete, candidate, focus, timeoutMs, cancel, isCurrent = () => true }) {
   if (!complete || !candidate?.model) return { status: 'no_model' };
   const signal = eitherSignal([AbortSignal.timeout(timeoutMs), ...(cancel ? [cancel] : [])]);
+  let reply;
   try {
-    const { answer, usage } = await complete(candidate.model, distillPrompt(candidate, focus), signal);
+    reply = await complete(candidate.model, distillPrompt(candidate, focus), signal);
+  } catch (error) {
+    return cancel?.aborted ? { status: 'dropped' } : { status: 'model_failed', error: String(error?.message ?? error) };
+  }
+  try {
+    const { answer, usage } = reply;
     const args = argumentsOf(answer);
     if (!args) return { status: 'unparsed', usage };
     if (cancel?.aborted || !isCurrent()) return { status: 'dropped', usage };
@@ -239,4 +245,9 @@ export async function distillCandidate({ proxyFetch, complete, candidate, focus,
     if (cancel?.aborted) return { status: 'dropped' };
     return { status: 'failed', error: String(error?.message ?? error) };
   }
+}
+
+/** Whether the headless model, not the Proxy, kept a candidate from being distilled: the agent's own model can. */
+export function needsAgentModel(outcome) {
+  return ['no_model', 'model_failed', 'unparsed'].includes(outcome?.status);
 }

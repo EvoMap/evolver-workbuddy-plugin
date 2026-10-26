@@ -20,6 +20,13 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   `Apply them where they fit.`
 
 ### Added
+- `/evolver-distill` falls back to the session's own model when the headless
+  CLI gives no Gene (inside the app it cannot sign in: the app hands its
+  encrypted sign-in only to its own CLI). The script prints the distillation
+  request under `EVOLVER: WRITE THE GENE YOURSELF` with a
+  `evolver-distill.mjs --post` command; the agent writes the JSON and runs it,
+  and the script posts it for the same candidate. Such a headless failure costs
+  the candidate no try; at session end it still does.
 - Session-end distillation. A turn that completed, used tools, passed its last
   check and reused no injected strategy leaves a candidate (secrets stripped) in
   `~/.evolver/state/workbuddy-distill-pending.json`; a later verified turn

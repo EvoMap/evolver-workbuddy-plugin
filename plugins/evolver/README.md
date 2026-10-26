@@ -77,7 +77,7 @@ WorkBuddy commands are prompts the model follows, so the plugin cannot answer on
 
 - `/evolver-status` shows the Proxy, the engine setup (status, version, error and next retry), and the latest reuse reports: deliveries with the Hub's `eligible` / `counted` / `weight`, and rejections with their reason.
 - `/evolver-search <task description or error text>` searches the EvoMap network through Proxy `POST /asset/search` (5 results).
-- `/evolver-distill [focus]` distills this session's latest verified turn now, instead of at session end (`scripts/evolver-distill.mjs`, keyed by `CODEBUDDY_SESSION_ID`).
+- `/evolver-distill [focus]` distills this session's latest verified turn now, instead of at session end (`scripts/evolver-distill.mjs`, keyed by `CODEBUDDY_SESSION_ID`); when the headless model cannot, the agent writes the Gene itself (see [Session-end distillation](#session-end-distillation)).
 - `/evolver-evolve [focus]` is the one prompt-only command: an evolution checkpoint the agent runs (recall, reflect). The host appends the focus as `ARGUMENTS:` instead of dsh's `Focus:` line.
 - `/evolver-sync`, `/evolver-review`, `/evolver-run`, `/evolver-solidify` run `evolver sync|review|run|solidify` with the given arguments: the plugin-managed Evolver when installed, else `evolver` on `PATH`, else `npx -y @evomap/evolver@^2.0.44`; 10 minutes at most, after which the process group is stopped.
 
@@ -138,8 +138,8 @@ Hooks have no model API, so the worker runs the CodeBuddy CLI headless, the prom
 120 seconds at most. It uses the CLI bundled with WorkBuddy
 (`~/Applications` or `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy` on macOS,
 `%LOCALAPPDATA%\Programs\WorkBuddy\resources\app.asar.unpacked\cli\bin\codebuddy` on Windows), else a
-`codebuddy` on `PATH`. No CLI or no model in the transcript means `no_model`; a CLI that is not signed in, a
-timeout, an unparsed answer or a Proxy error means a failed try. The headless run loads this plugin as well, so
+`codebuddy` on `PATH`. No CLI or no model in the transcript means `no_model`; a CLI that is not signed in or a
+timeout means `model_failed`; each of those, an unparsed answer or a Proxy error is a failed try. The headless run loads this plugin as well, so
 it is started with `EVOLVER_HEADLESS=1`, which every hook of this plugin answers with `{}` and nothing else.
 
 A candidate stays on disk until it is distilled (three failed tries give it up). One whose session is over —
@@ -147,6 +147,15 @@ ended, or killed with its CodeBuddy process — is claimed by the next worker th
 and session end), one process at a time, while an idle session keeps its own. A correction that arrives while
 the worker distills stops it: the worker watches the candidate file and never sends a candidate that is gone.
 `/evolver-distill` does the same at once.
+
+Inside the WorkBuddy app the headless CLI is usually not signed in: the app keeps its sign-in encrypted and gives
+the key only to its own CLI, which removes it from the environment that hooks and commands inherit. So when
+`/evolver-distill` gets no Gene from the headless model (`no_model`, `model_failed` or an unparsed answer), it
+costs the candidate no try and prints `EVOLVER: WRITE THE GENE YOURSELF`, the same request the headless model
+gets, and a command: the agent writes the Gene with the session's own model and runs
+`node scripts/evolver-distill.mjs --post` with the JSON on stdin through its shell tool, which sends it for the
+same candidate and removes it. This is the one place the turn's record enters the conversation, and only when
+the user asked for it. Session-end distillation has no agent to fall back on and keeps counting failed tries.
 
 The owner of a candidate or an injection is the CodeBuddy process that runs the hooks: the hook's parent, or the
 parent of the `$SHELL -c` the host starts each hook through when that shell stays in between. Limits of that rule:

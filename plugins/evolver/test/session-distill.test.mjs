@@ -116,7 +116,7 @@ test('an answer that is no Gene, or a model that fails, keeps nothing from reach
   assert.equal((await distillCandidate({ proxyFetch, complete: fakeModel('not json').complete, candidate, timeoutMs: 1_000 })).status, 'unparsed');
   const broken = async () => { throw new Error('codebuddy gave no answer: Authentication required'); };
   const failed = await distillCandidate({ proxyFetch, complete: broken, candidate, timeoutMs: 1_000 });
-  assert.equal(failed.status, 'failed');
+  assert.equal(failed.status, 'model_failed');
   assert.match(failed.error, /Authentication required/);
   assert.deepEqual(sent, []);
 });
