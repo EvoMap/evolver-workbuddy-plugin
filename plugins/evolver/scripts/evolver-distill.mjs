@@ -40,8 +40,15 @@ function agentInstructions(sessionId, candidate, focus, outcome) {
   ].join('\n');
 }
 
+function draftNote(data) {
+  const quality = data?.quality;
+  return quality ? ` (quality ${quality.score}/${quality.threshold}${quality.reason ? `, ${quality.reason}` : ''})` : '';
+}
+
 function verdictOf(outcome) {
   if (outcome.status === 'nothing') return failure(NOTHING);
+  if (outcome.status === 'declined') return success(`No Gene: the turn holds no method worth reusing (${outcome.reason}).`);
+  if (outcome.status === 'draft') return failure(`The Proxy kept the Gene as a draft only and stored nothing${draftNote(outcome.data)}.`);
   if (outcome.status === 'unparsed') return failure('The Gene must be one JSON object with at least a "summary".');
   return outcome.status === 'sent' ? success(shown(outcome.data ?? 'distilled')) : failure(`Distillation ${outcome.status}: ${outcome.error ?? ''}`.trim());
 }

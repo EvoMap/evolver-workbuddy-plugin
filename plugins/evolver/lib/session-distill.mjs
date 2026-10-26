@@ -37,16 +37,21 @@ export function migrateLegacyCandidates(legacy = legacyPendingPath()) {
   removeState(legacy);
 }
 
+const MIN_COMMANDS_WITHOUT_EDITS = 3;
+
 /**
- * Why a finished turn leaves no candidate, or null when it does. A turn that reused an injected strategy
- * adds evidence to that asset through its reuse report rather than a near-copy of it; a chat reply without a
- * single command has no method to keep.
+ * Why a finished turn leaves no candidate, or null when it does. Only work worth a Gene qualifies: a turn
+ * proved by a check (test, lint, typecheck or build) that passed last, which changed files or ran a few
+ * commands. Small talk, a lookup or a one-off command proves no method. A turn that reused an injected
+ * strategy adds evidence to that asset through its reuse report rather than a near-copy of it.
  */
 export function skipReason(reasonKind, record, { reusedAsset = false } = {}) {
   if (reasonKind !== 'completed') return 'not_completed';
   if (!record.answer) return 'no_answer';
-  if (record.checks.at(-1)?.failed) return 'failed_check';
-  if (record.commands.length === 0 && record.edits.length === 0) return 'no_tool_use';
+  const lastCheck = record.checks.at(-1);
+  if (!lastCheck) return 'unverified';
+  if (lastCheck.failed) return 'failed_check';
+  if (record.edits.length === 0 && record.commands.length < MIN_COMMANDS_WITHOUT_EDITS) return 'too_little_work';
   if (reusedAsset) return 'asset_reused';
   return null;
 }
@@ -149,15 +154,15 @@ export function claimLeftoverCandidates({ isGone = ownerIsGone, pid = process.pi
 }
 
 /**
- * Removes a candidate once it was distilled, or counts a failed try and gives up after MAX_ATTEMPTS; a try
+ * Removes a candidate once it is `done` with, or counts a failed try and gives up after MAX_ATTEMPTS; a try
  * that is not `counted` only releases the claim. A newer candidate the session wrote meanwhile is left alone.
  */
-export function settleCandidate(sessionId, candidate, { sent, counted = true }) {
+export function settleCandidate(sessionId, candidate, { done, counted = true }) {
   updateState(pendingPath(), {}, (pending) => {
     const current = pending[sessionId];
     if (!current || current.at !== candidate.at) return undefined;
     const attempts = (current.attempts ?? 0) + (counted ? 1 : 0);
-    if (sent || attempts >= MAX_ATTEMPTS) {
+    if (done || attempts >= MAX_ATTEMPTS) {
       const { [sessionId]: settled, ...rest } = pending;
       return rest;
     }
@@ -174,7 +179,9 @@ export function distillPrompt(candidate, focus = '') {
     'a method another agent could follow on a similar task, written for the kind of data or system involved,',
     'not for these files, names or values. Do not include the answer itself.',
     ...(focusText ? [`Focus on: ${focusText}`] : []),
-    'Answer with a JSON object only, with these fields:',
+    'Keep only knowledge dense enough to reuse. If the record shows routine steps, a lookup or small talk,',
+    'with no method another agent would gain from, answer {"skip": "<why, in one sentence>"} instead.',
+    'Otherwise answer with a JSON object only, with these fields:',
     '  title: short capability name',
     '  summary: what was solved and under which conditions',
     '  strategy: ordered, reproducible steps',
@@ -206,17 +213,27 @@ function listOf(value) {
   return value.split(/\n+|(?<=\.)\s+(?=\d+[.)]\s)/).map((item) => item.replace(ITEM_NUMBER, '').trim()).filter(Boolean);
 }
 
-export function argumentsOf(text) {
+function jsonObjectOf(text) {
   const match = String(text ?? '').match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]);
-    if (typeof parsed?.summary !== 'string' || !parsed.summary.trim()) return null;
-    for (const field of LIST_FIELDS) if (field in parsed) parsed[field] = listOf(parsed[field]);
-    return Object.fromEntries(ARGUMENT_FIELDS.filter((field) => parsed[field] !== undefined).map((field) => [field, parsed[field]]));
+    return JSON.parse(match[0]);
   } catch {
     return null;
   }
+}
+
+/** Why the model judged the turn not worth a Gene, or null when it wrote one. */
+export function declineOf(text) {
+  const skip = jsonObjectOf(text)?.skip;
+  return typeof skip === 'string' && skip.trim() ? skip.trim() : null;
+}
+
+export function argumentsOf(text) {
+  const parsed = jsonObjectOf(text);
+  if (typeof parsed?.summary !== 'string' || !parsed.summary.trim()) return null;
+  for (const field of LIST_FIELDS) if (field in parsed) parsed[field] = listOf(parsed[field]);
+  return Object.fromEntries(ARGUMENT_FIELDS.filter((field) => parsed[field] !== undefined).map((field) => [field, parsed[field]]));
 }
 
 export function distillBody(candidate, args, usage) {
@@ -251,15 +268,32 @@ export async function distillCandidate({ proxyFetch, complete, candidate, focus,
   }
   try {
     const { answer, usage } = reply;
+    const declined = declineOf(answer);
+    if (declined) return { status: 'declined', reason: declined, usage };
     const args = argumentsOf(answer);
     if (!args) return { status: 'unparsed', usage };
     if (cancel?.aborted || !isCurrent()) return { status: 'dropped', usage };
     const result = await proxyFetch('POST', '/conversation/distill', distillBody(candidate, args, usage), signal);
-    return result?.ok ? { status: 'sent', usage, data: result.data } : { status: 'failed', error: String(result?.error) };
+    return { ...storedOutcomeOf(result), usage };
   } catch (error) {
     if (cancel?.aborted) return { status: 'dropped' };
     return { status: 'failed', error: String(error?.message ?? error) };
   }
+}
+
+/**
+ * What the Proxy did with a Gene. It answers `ok` with `status: 'draft'` when it would not store the Gene
+ * (too weak for its quality gate, or a validation trace no host verifier confirmed): nothing was kept, and
+ * sending it again gives the same answer.
+ */
+export function storedOutcomeOf(result) {
+  if (!result?.ok) return { status: 'failed', error: String(result?.error) };
+  return result.data?.status === 'draft' ? { status: 'draft', data: result.data } : { status: 'sent', data: result.data };
+}
+
+/** Whether a candidate is finished with: distilled, judged not worth a Gene, or refused for good by the Proxy. */
+export function isSettled(outcome) {
+  return ['sent', 'declined', 'draft'].includes(outcome?.status);
 }
 
 /** Whether the headless model, not the Proxy, kept a candidate from being distilled: the agent's own model can. */

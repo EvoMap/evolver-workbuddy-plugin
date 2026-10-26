@@ -12,7 +12,7 @@ This plugin packages Evolver as WorkBuddy hooks, slash commands and a few small 
 | Engine notice | SessionStart hook | Says nothing, except once for each outcome of the engine setup (installed, upgraded, started, or why it failed, with the manual fix). Fails open with `{}`. |
 | Prompt recall | UserPromptSubmit hook | Recalls by text through Proxy `/asset/fetch` (no ids, no `limit`: the Proxy default of 2 candidates) and injects one asset's complete strategy as an `[Evolution Memory]` block. Picks the best-scored asset with 4+ steps and at most 4000 strategy characters, each only once per session. Skips slash commands, acknowledgements, and prompts under 8 characters. 5s recall budget; fails open with `{}`. |
 | Reuse reports | FinalStop, SessionEnd, UserPromptSubmit, PreToolUse and SessionStart hooks | Reports every injected strategy to the Hub through Proxy `POST /asset/reuse-result`, with evidence read off the turn: the last test/build/lint/type-check, whether the strategy's steps show up in the turn's commands, paths, written code and answer, the next prompt's correction or approval, and whether the next session still has the edited files. See [Reuse reports](#reuse-reports). |
-| Distillation | FinalStop, UserPromptSubmit, SessionEnd and SessionStart hooks + background worker | A verified turn leaves a candidate; at session end a detached worker turns it into a Gene with one headless model call. See [Session-end distillation](#session-end-distillation). |
+| Distillation | FinalStop, UserPromptSubmit, SessionEnd and SessionStart hooks + background worker | A turn proved by a passing check, with real work in it, leaves a candidate; at session end a detached worker turns it into a Gene with one headless model call. See [Session-end distillation](#session-end-distillation). |
 | Quick entry | Slash commands | `/evolver-status`, `/evolver-search`, `/evolver-distill`, `/evolver-evolve`, `/evolver-sync`, `/evolver-review`, `/evolver-run`, `/evolver-solidify`. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and audit events; WorkBuddy should not auto-apply generated output unless the user asks. |
 
@@ -124,7 +124,10 @@ State lives in `${CODEBUDDY_PLUGIN_DATA}` (fallback `~/.evolver/workbuddy-hooks/
 
 ## Session-end distillation
 
-A turn that ended completed, used tools, passed its last check and reused no injected strategy leaves a
+Only work dense enough to teach another agent is distilled, at most once a session. A turn qualifies when it
+ended completed with an answer, ran at least one check (a test, lint, typecheck or build command) and passed the
+last one, changed files or ran at least three commands, and reused no injected strategy (its reuse report
+carries that evidence instead). Small talk, lookups and one-off commands never qualify. Such a turn leaves a
 candidate in `${CODEBUDDY_PLUGIN_DATA}/workbuddy-distill-pending.json` (apart from other hosts' candidates, which
 run on another model; not in `~/.evolver`, which WorkBuddy's sandbox keeps `/evolver-*` commands from writing);
 a later verified turn replaces it, and a next prompt that reads as a correction drops it. When
@@ -133,6 +136,12 @@ digest of that turn (task, commands, touched paths, checks, final answer — nev
 headless call to the session's own model, then sends it to the Proxy's `POST /conversation/distill` with
 `persist: true`, `publish: false` and its own token cost as `distill_usage`. Keys and tokens are stripped from
 the candidate first, paths and a manual focus included.
+
+Two more gates follow. The model is told to keep only reusable knowledge and to answer `{"skip": "<why>"}` for
+routine work; such a candidate is dropped and nothing is sent. The Proxy then scores the Gene (its quality gate)
+and answers `status: "draft"` when it stores nothing: too weak a Gene, or a validation trace no host verifier
+confirmed. A draft counts as not stored (`/evolver-distill` says so, with the score) and is not sent again,
+since the same Gene would get the same answer.
 
 Hooks have no model API, so the worker runs the CodeBuddy CLI headless, the prompt on stdin:
 `codebuddy -p --tools "" --no-session-persistence --output-format json --max-turns 1 --model <the turn's model>`,

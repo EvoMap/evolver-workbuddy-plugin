@@ -27,8 +27,14 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   `evolver-distill.mjs --post` command; the agent writes the JSON and runs it,
   and the script posts it for the same candidate. Such a headless failure costs
   the candidate no try; at session end it still does.
-- Session-end distillation. A turn that completed, used tools, passed its last
-  check and reused no injected strategy leaves a candidate (secrets stripped) in
+- Session-end distillation, for knowledge-dense turns only. A turn that
+  completed with an answer, ran a check (test, lint, typecheck or build) and
+  passed the last one, changed files or ran three or more commands, and reused
+  no injected strategy leaves a candidate (secrets stripped); small talk,
+  lookups and one-off commands never do. The model may answer
+  `{"skip": "<why>"}` for routine work, which drops the candidate, and a Proxy
+  answer of `status: "draft"` (stored nothing) counts as not stored and is not
+  retried. The candidate lives in
   `${CODEBUDDY_PLUGIN_DATA}/workbuddy-distill-pending.json`, where WorkBuddy's
   sandbox lets the `/evolver-*` commands write too (it keeps them from
   `~/.evolver`); a session start moves one an earlier build left in

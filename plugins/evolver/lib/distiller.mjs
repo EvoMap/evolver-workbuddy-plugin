@@ -1,6 +1,6 @@
 import {
-  argumentsOf, claimCandidate, claimLeftoverCandidates, distillBody, distillCandidate, dueCandidates, isCurrentCandidate,
-  needsAgentModel, settleCandidate,
+  argumentsOf, claimCandidate, claimLeftoverCandidates, declineOf, distillBody, distillCandidate, dueCandidates,
+  isCurrentCandidate, isSettled, needsAgentModel, settleCandidate, storedOutcomeOf,
 } from './session-distill.mjs';
 
 export const DISTILL_TIMEOUT_MS = 120_000;
@@ -30,7 +30,7 @@ export function createDistiller({ proxyFetch, complete, timeoutMs = DISTILL_TIME
     try {
       const outcome = await distillCandidate({ proxyFetch, complete, candidate, focus, timeoutMs, cancel: watch.signal, isCurrent });
       const counted = countModelFailures || !needsAgentModel(outcome);
-      settleCandidate(sessionId, candidate, { sent: outcome.status === 'sent', counted });
+      settleCandidate(sessionId, candidate, { done: isSettled(outcome), counted });
       return outcome;
     } finally {
       watch.stop();
@@ -42,15 +42,21 @@ export function createDistiller({ proxyFetch, complete, timeoutMs = DISTILL_TIME
       const own = claimCandidate(sessionId);
       return own ? run(own, focus) : { status: 'failed', error: 'another process is distilling this candidate' };
     },
-    /** Sends the Gene the agent's own model wrote for this session's candidate; a failed send costs no try. */
+    /**
+     * Sends the Gene the agent's own model wrote for this session's candidate, or drops the candidate when the
+     * agent judged it not worth one; a failed send costs no try.
+     */
     async postGene(sessionId, text) {
-      const args = argumentsOf(text);
-      if (!args) return { status: 'unparsed' };
+      const declined = declineOf(text);
+      const args = declined ? null : argumentsOf(text);
+      if (!declined && !args) return { status: 'unparsed' };
       const own = claimCandidate(sessionId);
       if (!own) return dueCandidates({ sessionId }).length === 0 ? { status: 'nothing' } : { status: 'failed', error: 'another process is distilling this candidate' };
-      const result = await proxyFetch('POST', '/conversation/distill', distillBody(own.candidate, args), AbortSignal.timeout(timeoutMs));
-      settleCandidate(sessionId, own.candidate, { sent: Boolean(result?.ok), counted: false });
-      return result?.ok ? { status: 'sent', data: result.data } : { status: 'failed', error: String(result?.error) };
+      const outcome = declined
+        ? { status: 'declined', reason: declined }
+        : storedOutcomeOf(await proxyFetch('POST', '/conversation/distill', distillBody(own.candidate, args), AbortSignal.timeout(timeoutMs)));
+      settleCandidate(sessionId, own.candidate, { done: isSettled(outcome), counted: false });
+      return outcome;
     },
     async distillLeftovers() {
       const outcomes = [];

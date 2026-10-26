@@ -10,6 +10,7 @@ import {
   argumentsOf, candidateOf, claimLeftoverCandidates, closeCandidate, distillCandidate, distillPrompt, dueCandidates,
   isCurrentCandidate, modelOf, rememberCandidate, settleCandidate, skipReason,
 } from '../lib/session-distill.mjs';
+import { createDistiller } from '../lib/distiller.mjs';
 import { sessionStatePath, writeState } from '../lib/state-file.mjs';
 
 const MODEL = { model: 'glm-5' };
@@ -55,15 +56,18 @@ function deadPid() {
   return Number(child.stdout.toString());
 }
 
-test('only a verified, completed turn that used tools and reused no strategy becomes a candidate', () => {
-  assert.equal(skipReason('completed', record()), null);
-  assert.equal(skipReason('aborted', record()), 'not_completed');
-  assert.equal(skipReason('error', record()), 'not_completed');
-  assert.equal(skipReason('completed', record({ answer: '' })), 'no_answer');
-  assert.equal(skipReason('completed', record({ checks: [{ command: 'npm test', failed: true }] })), 'failed_check');
-  assert.equal(skipReason('completed', record({ commands: [] })), 'no_tool_use');
-  assert.equal(skipReason('completed', record({ commands: [], edits: ['x'] })), null);
-  assert.equal(skipReason('completed', record(), { reusedAsset: true }), 'asset_reused');
+test('only a completed turn proved by a passing check, with real work and no reused strategy, becomes a candidate', () => {
+  const passed = [{ command: 'npm test', failed: false }];
+  const verified = (overrides = {}) => record({ checks: passed, edits: ['export const retry = 1;'], ...overrides });
+  assert.equal(skipReason('completed', verified()), null);
+  assert.equal(skipReason('aborted', verified()), 'not_completed');
+  assert.equal(skipReason('error', verified()), 'not_completed');
+  assert.equal(skipReason('completed', verified({ answer: '' })), 'no_answer');
+  assert.equal(skipReason('completed', verified({ checks: [] })), 'unverified');
+  assert.equal(skipReason('completed', verified({ checks: [...passed, { command: 'npm test', failed: true }] })), 'failed_check');
+  assert.equal(skipReason('completed', verified({ edits: [], commands: ['ls', 'npm test'] })), 'too_little_work');
+  assert.equal(skipReason('completed', verified({ edits: [], commands: ['git log', 'grep -rn retry src', 'npm test'] })), null);
+  assert.equal(skipReason('completed', verified(), { reusedAsset: true }), 'asset_reused');
 });
 
 test("the model is the one behind the turn's latest assistant message", () => {
@@ -163,17 +167,17 @@ test('a leftover candidate is claimed by one process only, and again once the cl
 
   assert.deepEqual(claimLeftoverCandidates({ isGone, pid: 111 }).map((due) => due.sessionId), ['killed']);
   assert.deepEqual(claimLeftoverCandidates({ isGone, pid: 333 }), [], 'a live claim is left alone');
-  settleCandidate('killed', { at: 1 }, { sent: false });
+  settleCandidate('killed', { at: 1 }, { done: false });
   assert.deepEqual(claimLeftoverCandidates({ isGone, pid: 333 }).map((due) => due.candidate.attempts), [1], 'a failed try is claimable again');
 });
 
 test('a candidate leaves the disk only once distilled, or after three failed tries', () => {
   const candidate = { pid: process.pid, at: 5, attempts: 0 };
   rememberCandidate('s', candidate);
-  settleCandidate('s', candidate, { sent: false });
-  settleCandidate('s', candidate, { sent: false });
+  settleCandidate('s', candidate, { done: false });
+  settleCandidate('s', candidate, { done: false });
   assert.equal(dueCandidates({ sessionId: 's' })[0].candidate.attempts, 2, 'kept for a retry');
-  settleCandidate('s', candidate, { sent: false });
+  settleCandidate('s', candidate, { done: false });
   assert.deepEqual(dueCandidates({ sessionId: 's' }), [], 'given up');
 
   rememberCandidate('s', candidate);
@@ -200,4 +204,37 @@ test('an idle session keeps its open strategies: only a gone host process counts
   ledger('gone', { assetId: 'sha256:c', extra: { pid: deadPid() } });
   assert.deepEqual(takeOrphanedUnreported().map((asset) => asset.assetId), ['sha256:c']);
   assert.deepEqual(takeOrphanedUnreported(), [], 'reported once');
+});
+
+test('a turn the model judges routine is dropped without reaching the Proxy', async () => {
+  const sent = [];
+  const proxyFetch = async (method, path) => { sent.push(path); return { ok: true }; };
+  const candidate = candidateOf({ prompt: 'what time is it', record: record(), model: MODEL, turn: 1 });
+  assert.match(distillPrompt(candidate), /answer \{"skip"/);
+  rememberCandidate('s-routine', candidate);
+  const distiller = createDistiller({ proxyFetch, complete: fakeModel('{"skip": "only listed a folder"}').complete });
+  const outcome = await distiller.distillSession('s-routine');
+  assert.deepEqual([outcome.status, outcome.reason], ['declined', 'only listed a folder']);
+  assert.deepEqual(sent, []);
+  assert.deepEqual(dueCandidates({ sessionId: 's-routine' }), []);
+});
+
+test('a Gene the Proxy keeps only as a draft counts as not stored, and is not sent again', async () => {
+  const proxyFetch = async () => ({ ok: true, data: { ok: true, status: 'draft', quality: { ok: false, score: 3, threshold: 5 } } });
+  const candidate = candidateOf({ prompt: 'add a retry', record: record(), model: MODEL, turn: 1 });
+  rememberCandidate('s-draft', candidate);
+  const outcome = await createDistiller({ proxyFetch, complete: fakeModel().complete }).distillSession('s-draft');
+  assert.equal(outcome.status, 'draft');
+  assert.equal(outcome.data.quality.score, 3);
+  assert.deepEqual(dueCandidates({ sessionId: 's-draft' }), []);
+});
+
+test("the agent's own model can also judge a turn not worth a Gene", async () => {
+  const sent = [];
+  const proxyFetch = async (method, path) => { sent.push(path); return { ok: true }; };
+  rememberCandidate('s-agent-skip', candidateOf({ prompt: 'rename a variable', record: record(), model: MODEL, turn: 1 }));
+  const outcome = await createDistiller({ proxyFetch, complete: null }).postGene('s-agent-skip', '{"skip": "a rename"}');
+  assert.equal(outcome.status, 'declined');
+  assert.deepEqual(sent, []);
+  assert.deepEqual(dueCandidates({ sessionId: 's-agent-skip' }), []);
 });
