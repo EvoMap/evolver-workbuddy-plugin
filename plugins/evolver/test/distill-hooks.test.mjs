@@ -95,7 +95,7 @@ function deadPid() {
   return Number(spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))']).stdout.toString());
 }
 
-test('a verified turn that reused no strategy becomes the candidate, with its model and no secrets', async () => {
+test('a verified turn becomes the candidate, with its model and no secrets', async () => {
   await startSandbox();
   const s = session('s-verified');
   await verifiedTurn(s, '用 Node 写一个 LRU 缓存，带测试，token=ghp_abcdefghijklmnopqrstuvwxyz0123');
