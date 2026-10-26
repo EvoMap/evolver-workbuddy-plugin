@@ -3,16 +3,87 @@
 All notable changes to the Evolver WorkBuddy plugin are documented here.
 This project follows Semantic Versioning.
 
-## [Unreleased]
+## [0.3.0] - 2026-10-26
+
+Nothing of Evolver but the recalled steps enters the model's context: reuse is
+reported by the hooks and verified work is distilled at session end, outside the
+conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
+
+### Removed
+- The `evolver-proxy` MCP server (`.mcp.json`, `mcp/evolver-proxy.mjs`) and its
+  `evolver_*` tools, and the `evolver` skill: WorkBuddy cannot gate a plugin
+  skill, so none ships.
+- The session-start note telling the agent to call `evolver_recipe_search`, the
+  "Proxy not reachable" note on every start (an engine setup outcome is still
+  told once), and the claim-link hint; the injected strategy no longer asks to search on or to
+  report through `evolver_asset_reuse_result`, it ends with
+  `Apply them where they fit.`
 
 ### Added
-- Automatic reuse reports. The `Stop` hook reports every strategy the plugin
+- `/evolver-distill` falls back to the session's own model when the headless
+  CLI gives no Gene (inside the app it cannot sign in: the app hands its
+  encrypted sign-in only to its own CLI). The script prints the distillation
+  request under `EVOLVER: WRITE THE GENE YOURSELF` with a
+  `evolver-distill.mjs --post` command; the agent writes the JSON and runs it,
+  and the script posts it for the same candidate. Such a headless failure costs
+  the candidate no try; at session end it still does. The command's heredoc
+  ends on a random line, so a Gene line cannot end it early and run as shell,
+  and it names the candidate it was written for: a Gene for a candidate a newer
+  turn replaced is not sent.
+- Session-end distillation, for knowledge-dense turns only. A turn that
+  completed with an answer, ran a check (test, lint, typecheck or build) and
+  passed the last one, and changed files or ran three or more commands leaves a
+  candidate (secrets stripped), whether or not it reused an injected strategy
+  (the engine's intake drops a Gene that repeats one it has); small talk,
+  lookups and one-off commands never do. The model may answer
+  `{"skip": "<why>"}` for routine work, which drops the candidate, and a Proxy
+  answer of `status: "draft"` (stored nothing) counts as not stored and is not
+  retried. The candidate lives in
+  `${CODEBUDDY_PLUGIN_DATA}/workbuddy-distill-pending.json`, where WorkBuddy's
+  sandbox lets the `/evolver-*` commands write too (it keeps them from
+  `~/.evolver`); a session start moves one an earlier build left in
+  `~/.evolver/state/` there, merged under the same lock. A later verified turn
+  replaces it and a correction drops it. The `SessionEnd` hook closes it and a
+  detached worker distills it with one headless CodeBuddy CLI call on the
+  turn's model (`codebuddy -p --tools "" --no-session-persistence
+  --output-format json --max-turns 1`, 120 s), then `POST /conversation/distill`
+  with `platform: workbuddy`, `trigger: session_end`, `persist: true`,
+  `publish: false` and `distill_usage`. A candidate is kept until distilled or
+  three failed tries; leftovers of ended or killed sessions are claimed by the
+  next worker, one process at a time.
+- Aborted reuse reports (`aborted: true`, tier `none`, `applied: used`):
+  at `SessionEnd` for every unreported injection, and at the next session start
+  for those of a session whose CodeBuddy process is gone. Every turn-end report
+  now carries `aborted`.
+- Turns close on the `FinalStop` hook instead of `Stop`: `final_stop_reason`
+  `completed` is a completed turn, `interrupted` / `cancelled` an aborted one,
+  `failed` an error; only a completed turn can become a candidate, and a turn
+  a Stop hook continued is closed once.
+- The headless distillation run carries `EVOLVER_HEADLESS=1`, which this
+  plugin's hooks answer with `{}`.
+- Commands `/evolver-distill`, `/evolver-evolve`, `/evolver-sync`,
+  `/evolver-run` and `/evolver-solidify`; `/evolver-search` and
+  `/evolver-review` now run a plugin script (`POST /asset/search`, and
+  `evolver review` through the plugin-managed engine, `evolver` or the pinned
+  `npx -y @evomap/evolver@^2.0.44`) instead of asking the model to call tools.
+  Each command runs one inline `` !`…` `` command with its arguments on stdin
+  through a quoted heredoc, `exec`ing the script so an argument line that ends
+  the heredoc early runs nothing after it, and with `CODEBUDDY_PLUGIN_DATA` set
+  from the host's load-time substitution, since the host's shell carries no
+  plugin's data folder; `/evolver-*` turns are neither recalled for, read as
+  corrections, nor distilled.
+- `updateState()`: every read-modify-write of a session file or the candidate
+  file runs under an exclusive lock whose dead owner is taken over.
+- Automatic reuse reports. The turn-end hook reports every strategy the plugin
   injected through Proxy `POST /asset/reuse-result` as
   `{asset_id, outcome, task_id, reason, evidence}`, with evidence read off the
   turn's transcript: the last test/build/lint/type-check (exit code and output,
-  `fail_then_pass` with output pipes ignored) and whether the strategy's steps
-  show up in the turn's commands, paths, written code and answer. A turn with
-  nothing to compare goes out as tier `none` with `applied: partial`.
+  `fail_then_pass` with output pipes ignored) or how the turn ended. An
+  injected strategy counts as used (`applied: used` on every report, as in dsh
+  #55): the outcome, the next prompt and kept edits judge whether it helped. The
+  applied verdict that matched strategy steps against the turn, and the
+  per-turn buffer of written code it needed, are gone; `reason` names the turn
+  and the check kind.
 - Follow-up reports: the next prompt's correction or approval (`:correction`,
   L3) and, at the next session in the same project, whether the edited files
   were kept or reverted (`:retention`, L2). A `PreToolUse` hook on edit tools
@@ -28,6 +99,10 @@ This project follows Semantic Versioning.
   (`eligible`, `counted`, `weight`) and rejections.
 
 ### Fixed
+- A timed-out `evolver` run on Windows ends its whole process tree
+  (`taskkill /T /F`), not only the root, so its Proxy and workers stop too.
+- An injection an earlier build recorded without its session id is reported at
+  `SessionEnd` under the session that holds it, not `workbuddy:unknown`.
 - `EVOMAP_PROXY_PORT` must be a port number (1–65535); anything else falls back
   to 19820, so it can no longer point the Proxy URL at another host. Proxy
   requests refuse redirects.
@@ -57,7 +132,6 @@ This project follows Semantic Versioning.
   `cancellationToken` are left alone.
 
 ### Changed
-- `evolver_asset_reuse_result` sends self-reported `L5` evidence.
 - `scripts/evolver-status.js` became `scripts/evolver-status.mjs`; the injection
   dedupe state moved from `recall-state.json` to per-session files.
 - Start hints now name `evolver lifecycle start` instead of running `evolver`

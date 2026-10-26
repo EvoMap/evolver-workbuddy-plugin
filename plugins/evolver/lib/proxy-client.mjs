@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+import { eitherSignal } from './abort-signal.mjs';
+
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 const STATUS_TIMEOUT_MS = 1500;
 const REPORT_TIMEOUT_MS = 8000;
@@ -27,7 +29,7 @@ export function proxyConnection() {
   }
 }
 
-async function proxyAnswer({ url, token }, method, path, { body, timeoutMs }) {
+async function proxyAnswer({ url, token }, method, path, { body, timeoutMs, signal }) {
   const headers = {};
   if (body) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -36,7 +38,7 @@ async function proxyAnswer({ url, token }, method, path, { body, timeoutMs }) {
     headers,
     body: body ? JSON.stringify(body) : undefined,
     redirect: 'error',
-    signal: AbortSignal.timeout(timeoutMs)
+    signal: signal ? eitherSignal([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs)
   });
   const text = await res.text();
   let data = {};
@@ -65,4 +67,14 @@ export async function proxyStatus(connection = proxyConnection()) {
 
 export function postReuseResult(report) {
   return proxyAnswer(proxyConnection(), 'POST', '/asset/reuse-result', { body: report, timeoutMs: REPORT_TIMEOUT_MS });
+}
+
+/** A Proxy call that resolves to `{ ok, status, data }` or `{ ok: false, error }`; never throws. */
+export async function proxyFetch(method, path, body, signal) {
+  try {
+    const answer = await proxyAnswer(proxyConnection(), method, path, { body, timeoutMs: REPORT_TIMEOUT_MS, signal });
+    return answer.ok ? answer : { ...answer, error: answer.data?.error ?? `Proxy ${path} returned HTTP ${answer.status}` };
+  } catch (error) {
+    return { ok: false, error: String(error?.message ?? error) };
+  }
 }

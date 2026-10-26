@@ -1,29 +1,33 @@
-import { UNKNOWN } from './applied.mjs';
 import { checkEvidenceOf } from './checks.mjs';
 import { REJECTED, RETRY, SENT, isSettled, withAttempt } from './report-outbox.mjs';
+import { outcomeOfReason } from './turn-outcomes.mjs';
 
 const LABEL_OUTCOMES = { correction: 'failed', praise: 'success' };
 const RETENTION_OUTCOMES = { kept: 'success', reverted: 'failed' };
-const UNKNOWN_APPLIED_AS = 'partial';
 const RECEIPT_FIELDS = ['recorded', 'eligible', 'counted', 'weight', 'reason'];
 
 export function turnTaskId(sessionId, turn) {
   return `workbuddy:${sessionId || 'unknown'}:${turn ?? 'unknown'}`;
 }
 
-export function immediateEvidenceOf({ checks, applied }) {
+// The model follows a strategy injected into its turn, so an injection is a use; whether it helped is
+// what the outcome, the check, the next prompt and the edits' retention tell.
+const APPLIED = 'used';
+
+export function immediateEvidenceOf({ checks, reasonKind }) {
   const check = checkEvidenceOf(checks);
-  const isKnown = applied !== UNKNOWN;
   return {
-    tier: check && isKnown ? 'L1' : 'none',
-    applied: isKnown ? applied : UNKNOWN_APPLIED_AS,
+    tier: check ? 'L1' : 'none',
+    applied: APPLIED,
     ...(check && { check }),
+    aborted: reasonKind === 'aborted',
     stage: 'immediate',
   };
 }
 
-function immediateOutcomeOf(evidence, answered) {
+function immediateOutcomeOf(evidence, reasonKind, answered) {
   if (evidence.check) return evidence.check.passed ? 'success' : 'failed';
+  if (reasonKind !== 'completed') return outcomeOfReason(reasonKind) ?? 'failed';
   return answered ? 'success' : 'failed';
 }
 
@@ -37,14 +41,14 @@ function reportOf({ assetId, taskId, outcome, reason, evidence }) {
   return { asset_id: assetId, outcome, task_id: taskId, reason, evidence };
 }
 
-export function immediateReportOf({ assetId, sessionId, turn, answered, checks, applied }) {
-  const evidence = immediateEvidenceOf({ checks, applied });
+export function immediateReportOf({ asset, sessionId, turn, reasonKind, answered, checks }) {
+  const evidence = immediateEvidenceOf({ checks, reasonKind });
   const ending = answered ? '' : '; the turn left no answer';
   return reportOf({
-    assetId,
+    assetId: asset.assetId,
     taskId: turnTaskId(sessionId, turn),
-    outcome: immediateOutcomeOf(evidence, answered),
-    reason: `Injected by Evolver into WorkBuddy turn ${turn}; applied: ${applied}; ${checkPhrase(evidence.check)}${ending}.`,
+    outcome: immediateOutcomeOf(evidence, reasonKind, answered),
+    reason: `Injected by Evolver into WorkBuddy turn ${turn}; ${checkPhrase(evidence.check)}${ending}.`,
     evidence,
   });
 }

@@ -6,7 +6,7 @@ Official EvoMap marketplace repository for the Evolver WorkBuddy / CodeBuddy plu
 
 | Plugin | Description |
 | --- | --- |
-| [**evolver**](plugins/evolver) | GEP-powered Evolver workflows for WorkBuddy: MCP bridge to the local Evolver Proxy, reusable Genes/Capsules, review-mode guidance, and auditable self-evolution. |
+| [**evolver**](plugins/evolver) | Evolver for WorkBuddy, all from hooks: proven strategies recalled behind the prompt, automatic reuse reports, and session-end distillation into reusable Genes, with nothing else of Evolver in the model's context. |
 
 ## Install
 
@@ -22,7 +22,7 @@ Then install the plugin:
 /plugin install evolver
 ```
 
-Start a new WorkBuddy session after installation so the bundled skill, commands, and MCP server are loaded.
+Start a new WorkBuddy session after installation so the hooks and `/evolver-*` commands are loaded. The plugin adds no MCP server, skill or tool to the model's context.
 
 **Local memory works with zero config** — no account, no key, nothing to fill in.
 The plugin installs and starts Evolver by itself at session start. Connecting to
@@ -43,10 +43,9 @@ Useful local checks:
 ```bash
 npm test
 node plugins/evolver/scripts/evolver-status.mjs
-node plugins/evolver/mcp/evolver-proxy.mjs
 ```
 
-The MCP bridge is dependency-free and talks only to the local Evolver Proxy. It reads the live Proxy URL and token from `~/.evolver/settings.json` at runtime and never prints the token.
+The hooks and scripts are dependency-free and talk only to the local Evolver Proxy. They read the live Proxy URL and token from `~/.evolver/settings.json` at runtime and never print the token.
 
 ## License
 

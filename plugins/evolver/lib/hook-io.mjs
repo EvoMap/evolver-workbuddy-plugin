@@ -1,3 +1,5 @@
+import { HEADLESS_MARKER } from './headless-model.mjs';
+
 const STDIN_WATCHDOG_MS = 1000;
 const STDIN_MAX_WAIT_MS = 3000;
 
@@ -21,13 +23,14 @@ function emit(eventName, context) {
 // hook always answers. Reading stdin to the end also keeps the host's writer
 // from hitting EPIPE.
 export function runHook(eventName, handle) {
+  const work = process.env[HEADLESS_MARKER] === '1' ? () => '' : handle;
   let buffer = '';
   let started = false;
   const start = async () => {
     if (started) return;
     started = true;
     try {
-      emit(eventName, await handle(parsedInput(buffer) ?? {}));
+      emit(eventName, await work(parsedInput(buffer) ?? {}));
     } catch {
       emit(eventName, '');
     }

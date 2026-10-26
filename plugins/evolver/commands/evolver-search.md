@@ -1,16 +1,10 @@
 ---
-description: "Search EvoMap Recipes first through the Evolver Proxy; Gene/Capsule search is fallback"
-argument-hint: "query or signal [more...]"
+description: "Search the EvoMap network for reusable assets."
+argument-hint: "<task description or error text>"
 ---
 
-# Evolver Recipe Search
+!`CODEBUDDY_PLUGIN_DATA="${CODEBUDDY_PLUGIN_DATA}" exec node "${CODEBUDDY_PLUGIN_ROOT}/scripts/evolver-search.mjs" <<'EVOLVER_ARGUMENTS'
+$ARGUMENTS
+EVOLVER_ARGUMENTS`
 
-Call `evolver_status` first to confirm the local Proxy is running.
-
-Treat `$ARGUMENTS` as a free-text Recipe query. If empty, derive the query from the current user task.
-
-1. Call `evolver_recipe_search` with `q` set to that query. Omit `q` to list published Recipes.
-2. If a Recipe hit applies, call `evolver_recipe_express` with its `recipeId`. Hub unfolds Gene then Capsule steps; do not parse recipe JSON locally.
-3. Only if no Recipe matches, call `evolver_search_assets` with signal keywords, then summarize returned Genes or Capsules.
-
-If the MCP tools are unavailable or the Proxy is unreachable, run `/evolver-status` to show what the plugin's automatic setup did; `evolver lifecycle start` starts the Proxy by hand. Do not query EvoMap Hub APIs directly.
+Show the output above to the user as it is. Do not call any other tool or command for it.

@@ -2,20 +2,18 @@
 
 Self-evolution workflows for WorkBuddy, powered by [Evolver](https://github.com/EvoMap/evolver) (`@evomap/evolver`) and [EvoMap](https://evomap.ai).
 
-This plugin packages Evolver as a WorkBuddy-ready workflow: a model-invoked skill, SessionStart / UserPromptSubmit hooks, slash commands, a local status helper, and an MCP bridge to the Evolver Proxy mailbox for Genes and Capsules.
+This plugin packages Evolver as WorkBuddy hooks, slash commands and a few small scripts. Nothing of Evolver but the recalled steps enters the model's context: there is no MCP server, no skill and no `evolver_*` tool. Reports go out at every turn end, the session's verified work is distilled when the session ends, and the `/evolver-*` commands (status, search, distill, evolve, sync, review, run, solidify) run plugin scripts and show their output; only `/evolver-evolve` is a prompt for the agent.
 
 ## What It Does
 
 | Layer | Mechanism | Behavior |
 | --- | --- | --- |
 | Engine setup | SessionStart hook + background worker | Makes sure this machine has a running Evolver Proxy of at least the required version: installs or upgrades `@evomap/evolver` into the plugin's data folder (never `npm -g`, never `sudo`) and starts it with `evolver lifecycle start`, all in a detached process so the hook stays within its timeout. See [Automatic Evolver setup](#automatic-evolver-setup). |
-| Session context | SessionStart hook | On startup, resume, clear, and compact, probes the local Proxy and injects a short `additionalContext` note: whether `evolver_*` tools are live, what the engine setup did or why it failed (with the manual fix), Recipe-first guidance, and a pending-claim hint. Fails open with `{}`. |
+| Engine notice | SessionStart hook | Says nothing, except once for each outcome of the engine setup (installed, upgraded, started, or why it failed, with the manual fix). Fails open with `{}`. |
 | Prompt recall | UserPromptSubmit hook | Recalls by text through Proxy `/asset/fetch` (no ids, no `limit`: the Proxy default of 2 candidates) and injects one asset's complete strategy as an `[Evolution Memory]` block. Picks the best-scored asset with 4+ steps and at most 4000 strategy characters, each only once per session. Skips slash commands, acknowledgements, and prompts under 8 characters. 5s recall budget; fails open with `{}`. |
-| Reuse reports | Stop, UserPromptSubmit, PreToolUse and SessionStart hooks | Reports every injected strategy to the Hub through Proxy `POST /asset/reuse-result`, with evidence read off the turn: the last test/build/lint/type-check, whether the strategy's steps show up in the turn's commands, paths, written code and answer, the next prompt's correction or approval, and whether the next session still has the edited files. See [Reuse reports](#reuse-reports). |
-| Passive recall | Skill guidance | Guides WorkBuddy to check local memory, reusable Genes, and relevant Capsules before substantive changes. |
-| Network bridge | MCP server `evolver-proxy` | Exposes Recipe-first `evolver_recipe_search` / `evolver_recipe_express`, then fallback `evolver_search_assets`, plus `evolver_status`, `evolver_fetch_asset`, `evolver_asset_reuse_result`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
-| Quick entry | Slash commands | Adds `/evolver-status`, `/evolver-review`, and `/evolver-search` for common workflows. |
-| Active control | CLI workflow | Guides WorkBuddy through `evolver`, `evolver --review`, `evolver --loop`, and strategy presets. |
+| Reuse reports | FinalStop, SessionEnd, UserPromptSubmit, PreToolUse and SessionStart hooks | Reports every injected strategy to the Hub through Proxy `POST /asset/reuse-result`, with evidence read off the turn: the last test/build/lint/type-check or how the turn ended, the next prompt's correction or approval, and whether the next session still has the edited files. See [Reuse reports](#reuse-reports). |
+| Distillation | FinalStop, UserPromptSubmit, SessionEnd and SessionStart hooks + background worker | A turn proved by a passing check, with real work in it, leaves a candidate; at session end a detached worker turns it into a Gene with one headless model call. See [Session-end distillation](#session-end-distillation). |
+| Quick entry | Slash commands | `/evolver-status`, `/evolver-search`, `/evolver-distill`, `/evolver-evolve`, `/evolver-sync`, `/evolver-review`, `/evolver-run`, `/evolver-solidify`. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and audit events; WorkBuddy should not auto-apply generated output unless the user asks. |
 
 ## Prerequisites
@@ -42,7 +40,7 @@ registers a fresh node for you and prints a link to claim it on evomap.ai — yo
 never paste an id or a secret here. Only fill this in to point the install at a
 node you already run yourself.
 
-The MCP bridge reads the live Proxy URL and token from:
+The hooks and scripts read the live Proxy URL and token from:
 
 ```text
 ~/.evolver/settings.json
@@ -54,7 +52,7 @@ If that file is absent, it falls back to:
 http://127.0.0.1:19820
 ```
 
-The plugin starts the Proxy at session start; `evolver lifecycle start` starts it by hand. The bridge never prints Proxy tokens.
+The plugin starts the Proxy at session start; `evolver lifecycle start` starts it by hand. Nothing prints Proxy tokens.
 
 ## Connecting to the EvoMap network (optional)
 
@@ -75,9 +73,15 @@ which is more trouble than it's worth.
 
 ## Commands
 
+WorkBuddy commands are prompts the model follows, so the plugin cannot answer one itself. The closest equivalent: each command's body holds one inline `` !`…` `` command, which the host runs while it renders the command and replaces by its output, and tells the model to show that output as it is, with no `evolver_*` tool involved. The arguments reach the script on stdin through a quoted heredoc, so no shell expands them, and the shell `exec`s the script, so a quoted argument line that ends the heredoc early runs nothing after it. The host's shell carries no plugin's data folder, so each command sets `CODEBUDDY_PLUGIN_DATA` from the `${CODEBUDDY_PLUGIN_DATA}` the host fills in when it loads the command; the scripts then read the state the hooks write. The host splits the arguments itself and drops their quotes before `$ARGUMENTS` is filled in, so `--summary="two words"` arrives as two words; a backtick in the arguments ends the inline command early (the rest is not run). On Windows the heredoc needs the host to run commands through bash (Git Bash), as it does when bash is installed; PowerShell has none.
+
 - `/evolver-status` shows the Proxy, the engine setup (status, version, error and next retry), and the latest reuse reports: deliveries with the Hub's `eligible` / `counted` / `weight`, and rejections with their reason.
-- `/evolver-review` runs `evolver --review` and asks WorkBuddy to explain the generated GEP output before applying anything.
-- `/evolver-search` searches Hub Recipes first, then falls back to Gene/Capsule search.
+- `/evolver-search <task description or error text>` searches the EvoMap network through Proxy `POST /asset/search` (5 results).
+- `/evolver-distill [focus]` distills this session's latest verified turn now, instead of at session end (`scripts/evolver-distill.mjs`, keyed by `CODEBUDDY_SESSION_ID`); when the headless model cannot, the agent writes the Gene itself (see [Session-end distillation](#session-end-distillation)).
+- `/evolver-evolve [focus]` is the one prompt-only command: an evolution checkpoint the agent runs (recall, reflect). The host appends the focus as `ARGUMENTS:` instead of dsh's `Focus:` line.
+- `/evolver-sync`, `/evolver-review`, `/evolver-run`, `/evolver-solidify` run `evolver sync|review|run|solidify` with the given arguments: the plugin-managed Evolver when installed, else `evolver` on `PATH`, else `npx -y @evomap/evolver@^2.0.44`; 10 minutes at most, after which the process group is stopped.
+
+A turn that runs an `/evolver-*` command, typed or as the host renders it (`<command-name>/evolver-…</command-name>`), is never recalled for, never read as a correction, and never a distillation candidate.
 
 ## Automatic Evolver setup
 
@@ -99,45 +103,89 @@ By hand: `npm install -g @evomap/evolver@latest`, then `evolver lifecycle start`
 
 ## Reuse reports
 
-Every strategy the plugin injects is reported once per turn as `{asset_id, outcome, task_id, reason, evidence}` to Proxy `POST /asset/reuse-result`. `reason` names the turn, the applied verdict and the check kind, never the prompt, a command or code.
+Every strategy the plugin injects is reported once per turn as `{asset_id, outcome, task_id, reason, evidence}` to Proxy `POST /asset/reuse-result`. Reasons name the turn and the check kind, never the prompt, a command or code.
 
 | Report | `task_id` | `evidence` | Sent when |
 | --- | --- | --- | --- |
-| Turn end | `workbuddy:<session>:<turn>` | `tier` `L1` when a check ran, else `none`; `applied`; `check {kind, passed, fail_then_pass}`; `stage: immediate` | Stop hook |
-| Correction / approval | `…:correction` | `tier: L3`, `applied`, `stage: correction` | the next prompt plainly says the turn did not work, or thanks it |
-| Retention | `…:retention` | `tier: L2`, `applied`, `stage: retention` | the next session in the same project finds the edited files kept or reverted |
-| `evolver_asset_reuse_result` | the model's own | `tier: L5`, `applied`, `stage: immediate` | the model calls the MCP tool |
+| Turn end | `workbuddy:<session>:<turn>` | `tier` `L1` when a check ran, else `none`; `applied: used`; `check {kind, passed, fail_then_pass}`; `aborted: false`; `stage: immediate` | FinalStop hook: `completed` as completed, `interrupted` / `cancelled` as aborted (`aborted: true`), `failed` as an error |
+| Correction / approval | `…:correction` | `tier: L3`, `applied: used`, `stage: correction` | the next prompt plainly says the turn did not work, or thanks it |
+| Retention | `…:retention` | `tier: L2`, `applied: used`, `stage: retention` | the next session in the same project finds the edited files kept or reverted |
+| Aborted | `workbuddy:<session>:<turn>` | `tier: none`, `applied: used`, `aborted: true`, `stage: immediate` | the session ends before the turn does (SessionEnd hook), or its host process was killed (at the next session start, once that process is gone) |
 
-- The Stop hook reads the turn from the session transcript (`transcript_path`), starting at the size it had when the prompt was submitted: shell calls (`Bash`, `PowerShell`) with their `Exit Code` and output, `Write` / `Edit` / `MultiEdit` / `NotebookEdit` arguments (200,000 characters a turn at most, never stored), paths, and the last assistant message (`last_assistant_message` when the transcript has none).
+- The FinalStop hook reads the turn from the session transcript (`transcript_path`), starting at the size it had when the prompt was submitted: shell calls (`Bash`, `PowerShell`) with their `Exit Code` and output, the files `Write` / `Edit` / `MultiEdit` / `NotebookEdit` changed, paths, and the last assistant message. FinalStop rather than Stop, because only FinalStop says how the turn ended (`final_stop_reason`), and it fires once a turn, after any Stop hook that asked the model to continue.
 - A check is the turn's last test, build, lint or type-check command not run in the background. It failed when its call did not complete, its exit code was not 0, or its output reports a failure. `fail_then_pass` compares the commands with output pipes and redirects (`| tail -9`, `2>&1`) removed.
-- `applied` is `used` when at least half the strategy's steps show up in the turn, `partial` when fewer do, `unused` when none do. When there is nothing to compare (only an answer, or no numbered steps) the report goes out as tier `none` with `applied: partial`, which the Hub weighs at 0 without the soft negative, and the reason says `applied: unknown`.
-- Outcome follows the last check; without one, a turn that left an answer is `success`, one that left none `failed`.
+- `applied` is always `used`: the model follows a strategy injected into its turn. Whether it helped is judged by the outcome (the last check, or how the turn ended), the next prompt and whether the edits are kept.
+- Outcome follows the last check; without one, a completed turn that left an answer is `success`, one that left none `failed`, and an errored or aborted turn `failed`.
 - The PreToolUse hook hashes each file before the turn's first edit to it, so the next session can tell kept from reverted.
 - Delivery goes through a queue that a detached worker drains, retried at every turn end and session start for 8 days. A Hub answer of `recorded`, `duplicate_report`, or `eligible: false` (`same_owner`, `daily_cap`) is final; `terminal: true`, `hub 400`, `hub 422` or a Proxy validation 400 is settled as rejected; `hub 404`, 5xx, 401/403/429, timeouts and an unreachable Proxy are retried.
 - Evolver 2.0.44 or newer forwards `evidence` and returns `eligible` / `counted` / `weight`; an older Proxy drops the evidence and the reports still count as plain reuse reports.
 
-State lives in `${CODEBUDDY_PLUGIN_DATA}` (fallback `~/.evolver/workbuddy-hooks/`): `session-<hash>.json` (turn counter, injected strategies, last turn's reuses), `edits-<hash>.jsonl`, `reports-queue.jsonl`, `reports-outbox.json`, `retention-pending.jsonl`, `engine.json`. Session files are removed after 8 days.
+State lives in `${CODEBUDDY_PLUGIN_DATA}` (fallback `~/.evolver/workbuddy-hooks/`): `session-<hash>.json` (turn counter, the turn's prompt without secrets, injected strategies, last turn's reuses), `edits-<hash>.jsonl`, `reports-queue.jsonl`, `reports-outbox.json`, `retention-pending.jsonl`, `engine.json`, `workbuddy-distill-pending.json`. A session start moves a `workbuddy-distill-pending.json` an earlier build left in `~/.evolver/state/` in here (a candidate already here wins). Session files are removed after 8 days. Every read-modify-write of a session file or the candidate file runs under an exclusive lock (`<file>.lock`, holding the owner's pid and a token): a dead owner's lock is taken over, and one that cannot be had within 2 seconds is given up on and the write runs unguarded.
+
+## Session-end distillation
+
+Only work dense enough to teach another agent is distilled, at most once a session. A turn qualifies when it
+ended completed with an answer, ran at least one check (a test, lint, typecheck or build command) and passed the
+last one, and changed files or ran at least three commands. A turn that reused an injected strategy is a candidate too:
+the engine's intake drops a Gene that repeats one it already has. Small talk, lookups and one-off commands never qualify. Such a turn leaves a
+candidate in `${CODEBUDDY_PLUGIN_DATA}/workbuddy-distill-pending.json` (apart from other hosts' candidates, which
+run on another model; not in `~/.evolver`, which WorkBuddy's sandbox keeps `/evolver-*` commands from writing);
+a later verified turn replaces it, and a next prompt that reads as a correction drops it. When
+the session ends (SessionEnd hook), the candidate is marked closed and a detached worker writes a Gene from a
+digest of that turn (task, commands, touched paths, checks, final answer — never the whole history) with one
+headless call to the session's own model, then sends it to the Proxy's `POST /conversation/distill` with
+`persist: true`, `publish: false` and its own token cost as `distill_usage`. Keys and tokens are stripped from
+the candidate first, paths and a manual focus included.
+
+Two more gates follow. The model is told to keep only reusable knowledge and to answer `{"skip": "<why>"}` for
+routine work; such a candidate is dropped and nothing is sent. The Proxy then scores the Gene (its quality gate)
+and answers `status: "draft"` when it stores nothing: too weak a Gene, or a validation trace no host verifier
+confirmed. A draft counts as not stored (`/evolver-distill` says so, with the score) and is not sent again,
+since the same Gene would get the same answer.
+
+Hooks have no model API, so the worker runs the CodeBuddy CLI headless, the prompt on stdin:
+`codebuddy -p --tools "" --no-session-persistence --output-format json --max-turns 1 --model <the turn's model>`,
+120 seconds at most. It uses the CLI bundled with WorkBuddy
+(`~/Applications` or `/Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/cli/bin/codebuddy` on macOS,
+`%LOCALAPPDATA%\Programs\WorkBuddy\resources\app.asar.unpacked\cli\bin\codebuddy` on Windows), else a
+`codebuddy` on `PATH`. No CLI or no model in the transcript means `no_model`; a CLI that is not signed in or a
+timeout means `model_failed`; each of those, an unparsed answer or a Proxy error is a failed try. The headless run loads this plugin as well, so
+it is started with `EVOLVER_HEADLESS=1`, which every hook of this plugin answers with `{}` and nothing else.
+
+A candidate stays on disk until it is distilled (three failed tries give it up). One whose session is over —
+ended, or killed with its CodeBuddy process — is claimed by the next worker that starts (at every session start
+and session end), one process at a time, while an idle session keeps its own. A correction that arrives while
+the worker distills stops it: the worker watches the candidate file and never sends a candidate that is gone.
+`/evolver-distill` does the same at once.
+
+Inside the WorkBuddy app the headless CLI is usually not signed in: the app keeps its sign-in encrypted and gives
+the key only to its own CLI, which removes it from the environment that hooks and commands inherit. So when
+`/evolver-distill` gets no Gene from the headless model (`no_model`, `model_failed` or an unparsed answer), it
+costs the candidate no try and prints `EVOLVER: WRITE THE GENE YOURSELF`, the same request the headless model
+gets, and a command: the agent writes the Gene with the session's own model and runs
+`node scripts/evolver-distill.mjs --post` with the JSON on stdin through its shell tool, which sends it for the
+same candidate and removes it. This is the one place the turn's record enters the conversation, and only when
+the user asked for it. Session-end distillation has no agent to fall back on and keeps counting failed tries.
+
+The owner of a candidate or an injection is the CodeBuddy process that runs the hooks: the hook's parent, or the
+parent of the `$SHELL -c` the host starts each hook through when that shell stays in between. Limits of that rule:
+
+- One long-lived CodeBuddy process serves many sessions, so a session whose tab was killed while that process
+  keeps running counts as killed only once the process exits; until then its injections and candidate wait.
+- On Windows, where there is no cheap probe, entries carry no owner, so a killed session's leftovers wait for a
+  session end that closes them.
+- On Windows the CLI keeps its child processes in a kill-on-close job, so a SessionEnd worker can die with the
+  CLI; its candidate stays closed on disk and the next session start distills it.
 
 ## Hooks
 
 - `SessionStart` → `hooks/session-start.mjs` (5s timeout).
 - `UserPromptSubmit` → `hooks/user-prompt-submit.mjs` (8s timeout, 5s Proxy recall; selection logic in `lib/strategy-recall.mjs`).
 - `PreToolUse` on `Write|Edit|MultiEdit|NotebookEdit` → `hooks/pre-tool-use.mjs` (5s timeout).
-- `Stop` → `hooks/stop.mjs` (10s timeout; subagent stops are skipped).
+- `FinalStop` → `hooks/final-stop.mjs` (10s timeout; subagent turns are skipped): reuse reports and the distillation candidate, by `final_stop_reason`.
+- `SessionEnd` → `hooks/session-end.mjs` (5s timeout): aborted reports, closes the candidate, starts the distillation worker.
 
 Plugin `hooks/hooks.json` hooks are not gated by `allowUntrustedFrontmatterHooks`; they run once the plugin is enabled.
-
-## MCP Tools
-
-- `evolver_status`
-- `evolver_recipe_search`
-- `evolver_recipe_express`
-- `evolver_search_assets` (fallback)
-- `evolver_fetch_asset`
-- `evolver_asset_reuse_result`
-- `evolver_publish_asset`
-- `evolver_distill_conversation`
-- `evolver_poll`
 
 ## Verify
 
@@ -146,12 +194,12 @@ From this plugin directory:
 ```bash
 npm test   # from the repository root
 node scripts/evolver-status.mjs
-node mcp/evolver-proxy.mjs
+node scripts/evolver-search.mjs "Postgres connection pool exhausted"
 echo '{"hook_event_name":"SessionStart","source":"startup"}' | node hooks/session-start.mjs
 echo '{"session_id":"t","prompt":"Postgres connection pool exhausted, how to debug"}' | node hooks/user-prompt-submit.mjs
 ```
 
-In normal WorkBuddy use, run `/evolver-status` or ask WorkBuddy to check Evolver Proxy status; when the MCP bridge is loaded it should call `evolver_status` first.
+In normal WorkBuddy use, run `/evolver-status`.
 
 ## License
 

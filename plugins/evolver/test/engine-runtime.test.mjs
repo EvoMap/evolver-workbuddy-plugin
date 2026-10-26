@@ -138,13 +138,13 @@ test('a lock left behind by a crashed install expires', async () => {
   assert.equal(npmCalls().length, 1);
 });
 
-test('session start says Evolver is being set up when the Proxy is down', async () => {
+test('session start adds nothing to the context while the Proxy is down and no setup has finished', async () => {
   mkdirSync(join(sandbox.data, 'engine.lock'), { recursive: true });
   const output = await runHook('session-start', { session_id: 's1', hook_event_name: 'SessionStart', source: 'startup' }, sandbox.env);
-  assert.match(output.hookSpecificOutput.additionalContext, /installing or starting Evolver in the background/);
+  assert.deepEqual(output, {});
 });
 
-test('session start reports a setup failure that is still backing off, with what to do', async () => {
+test('session start reports a setup failure once, with what to do', async () => {
   const { writeEngineState } = await import(ENGINE_STATE);
   process.env.CODEBUDDY_PLUGIN_DATA = sandbox.data;
   writeEngineState({ status: 'install_failed', error: 'npm ERR! code EACCES', at: Date.now(), failures: 1, retryAt: Date.now() + 600_000 });
@@ -154,4 +154,6 @@ test('session start reports a setup failure that is still backing off, with what
   assert.match(context, /Installing Evolver failed \(npm ERR! code EACCES\)/);
   assert.match(context, /npm install -g @evomap\/evolver@latest/);
   assert.equal(existsSync(join(sandbox.data, 'engine')), false);
+  const again = await runHook('session-start', { session_id: 's2', hook_event_name: 'SessionStart', source: 'startup' }, sandbox.env);
+  assert.deepEqual(again, {}, 'told once');
 });

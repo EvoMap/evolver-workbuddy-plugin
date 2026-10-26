@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "$FAKE_CODEBUDDY_NODE" "$(dirname "$0")/codebuddy.mjs" "$@"
