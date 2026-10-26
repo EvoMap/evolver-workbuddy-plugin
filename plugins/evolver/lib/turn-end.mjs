@@ -1,4 +1,3 @@
-import { appliedVerdictOf } from './applied.mjs';
 import { DRAIN_TASK, startInBackground } from './background.mjs';
 import { isEvolverCommand } from './command-turn.mjs';
 import { takeUnreported } from './injected-ledger.mjs';
@@ -10,7 +9,7 @@ import { candidateOf, modelOf, rememberCandidate, skipReason } from './session-d
 import { readSession, takeFilesBefore, updateSession } from './session-state.mjs';
 import { turnActivityOf, turnRecordsSince } from './transcript.mjs';
 
-const EMPTY_RECORD = { checks: [], commands: [], paths: [], edits: [], answer: '' };
+const ABORTED_RECORD = { checks: [], answer: '' };
 
 export function isMainSession(input) {
   return typeof input.session_id === 'string' && Boolean(input.session_id) && !input.agent_id;
@@ -24,25 +23,24 @@ function reportsOf(assets, { sessionId, turn, reasonKind, record }) {
     reasonKind,
     answered: record.answer.length > 0,
     checks: record.checks,
-    applied: appliedVerdictOf({ strategyText: asset.strategyText, ...record }).verdict,
   }));
 }
 
 export function abortedReports(assets) {
   return assets.map((asset) => ({
-    report: reportsOf([asset], { sessionId: asset.sessionId, reasonKind: 'aborted', record: EMPTY_RECORD })[0],
+    report: reportsOf([asset], { sessionId: asset.sessionId, reasonKind: 'aborted', record: ABORTED_RECORD })[0],
     sessionId: asset.sessionId,
   }));
 }
 
-function rememberTurnCandidate(sessionId, session, { reasonKind, finished, records, reusedAsset }) {
-  if (isEvolverCommand(session.prompt) || skipReason(reasonKind, finished, { reusedAsset })) return;
+function rememberTurnCandidate(sessionId, session, { reasonKind, finished, records }) {
+  if (isEvolverCommand(session.prompt) || skipReason(reasonKind, finished)) return;
   rememberCandidate(sessionId, candidateOf({ prompt: session.prompt, record: finished, model: modelOf(records), turn: session.turn }));
 }
 
 /**
  * Every injected strategy is reported when its turn ends, with the turn's own evidence; the turn itself
- * becomes this session's distillation candidate when it finished verified without reusing one.
+ * becomes this session's distillation candidate when it finished verified.
  */
 export function closeTurn(input, reasonKind) {
   const sessionId = input.session_id;
@@ -58,6 +56,6 @@ export function closeTurn(input, reasonKind) {
     rememberForRetention({ sessionId, projectDir: projectDirOf(input), reuses, editedBefore });
   }
   commit();
-  rememberTurnCandidate(sessionId, session, { reasonKind, finished, records, reusedAsset: reuses.some((reuse) => reuse.applied === 'used') });
+  rememberTurnCandidate(sessionId, session, { reasonKind, finished, records });
   if (reports.length > 0) startInBackground([DRAIN_TASK]);
 }

@@ -43,16 +43,15 @@ const MIN_COMMANDS_WITHOUT_EDITS = 3;
  * Why a finished turn leaves no candidate, or null when it does. Only work worth a Gene qualifies: a turn
  * proved by a check (test, lint, typecheck or build) that passed last, which changed files or ran a few
  * commands. Small talk, a lookup or a one-off command proves no method. A turn that reused an injected
- * strategy adds evidence to that asset through its reuse report rather than a near-copy of it.
+ * strategy is distilled too: the engine's intake drops a Gene that repeats one it already has.
  */
-export function skipReason(reasonKind, record, { reusedAsset = false } = {}) {
+export function skipReason(reasonKind, record) {
   if (reasonKind !== 'completed') return 'not_completed';
   if (!record.answer) return 'no_answer';
   const lastCheck = record.checks.at(-1);
   if (!lastCheck) return 'unverified';
   if (lastCheck.failed) return 'failed_check';
   if (record.edits.length === 0 && record.commands.length < MIN_COMMANDS_WITHOUT_EDITS) return 'too_little_work';
-  if (reusedAsset) return 'asset_reused';
   return null;
 }
 

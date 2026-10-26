@@ -191,8 +191,8 @@ test('at session end, an unreported strategy is reported aborted and the candida
     asset_id: 'sha256:cut',
     outcome: 'failed',
     task_id: 'workbuddy:s-cut:1',
-    reason: 'Injected by Evolver into WorkBuddy turn 1; applied: unknown; no check ran; the turn left no answer.',
-    evidence: { tier: 'none', applied: 'partial', aborted: true, stage: 'immediate' },
+    reason: 'Injected by Evolver into WorkBuddy turn 1; no check ran; the turn left no answer.',
+    evidence: { tier: 'none', applied: 'used', aborted: true, stage: 'immediate' },
   });
   assert.ok(pending()['s-done'], 'a live session keeps its candidate');
 

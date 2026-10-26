@@ -25,7 +25,7 @@ function proxy(answer = { ok: true, status: 200, data: { recorded: true } }) {
   };
 }
 
-const immediate = (overrides = {}) => immediateReportOf({ asset: { assetId: 'sha256:a' }, sessionId: 's1', turn: 4, reasonKind: 'completed', answered: true, checks: [], applied: 'used', ...overrides });
+const immediate = (overrides = {}) => immediateReportOf({ asset: { assetId: 'sha256:a' }, sessionId: 's1', turn: 4, reasonKind: 'completed', answered: true, checks: [], ...overrides });
 const queuedOne = (report) => withQueued({}, [{ report, sessionId: 's1' }], NOW);
 const verified = () => immediate({ checks: [{ command: 'npm test', failed: false }] });
 
@@ -34,7 +34,7 @@ test('a turn that ran no check still reports its injection, as tier none', () =>
     asset_id: 'sha256:a',
     outcome: 'success',
     task_id: 'workbuddy:s1:4',
-    reason: 'Injected by Evolver into WorkBuddy turn 4; applied: used; no check ran.',
+    reason: 'Injected by Evolver into WorkBuddy turn 4; no check ran.',
     evidence: { tier: 'none', applied: 'used', aborted: false, stage: 'immediate' },
   });
 });
@@ -57,10 +57,10 @@ test('a check the turn ran makes the report L1 and decides its outcome', () => {
   assert.deepEqual(passed.evidence.check, { kind: 'test', passed: true, fail_then_pass: false });
   assert.equal(passed.evidence.tier, 'L1');
 
-  const failed = immediate({ checks: [{ command: 'npx tsc -p .', failed: true }], applied: 'partial', answered: true });
+  const failed = immediate({ checks: [{ command: 'npx tsc -p .', failed: true }], answered: true });
   assert.equal(failed.outcome, 'failed');
   assert.deepEqual(failed.evidence.check, { kind: 'typecheck', passed: false, fail_then_pass: false });
-  assert.equal(failed.evidence.applied, 'partial');
+  assert.equal(failed.evidence.applied, 'used');
 });
 
 test('the same check failing and then passing is recorded as such', () => {
@@ -76,11 +76,10 @@ test('a report reveals no command, prompt or code', () => {
   assert.doesNotMatch(JSON.stringify(report), /hunter22|secret\/path|npm test/);
 });
 
-test('a reuse that cannot be judged is exposure only, without the unused penalty', () => {
-  const report = immediate({ applied: 'unknown' });
-  assert.deepEqual(report.evidence, { tier: 'none', applied: 'partial', aborted: false, stage: 'immediate' });
-  assert.match(report.reason, /applied: unknown/);
-  assert.equal(immediate({ applied: 'unknown', checks: [{ command: 'npm test', failed: false }] }).evidence.tier, 'none');
+test('an injected strategy counts as used, and the reason names only the turn and the check', () => {
+  assert.equal(immediate().evidence.applied, 'used');
+  assert.equal(verified().evidence.applied, 'used');
+  assert.equal(verified().reason, 'Injected by Evolver into WorkBuddy turn 4; last test passed.');
 });
 
 test('a correction or approval follow-up is L3 under the turn task id plus :correction', () => {
@@ -97,11 +96,11 @@ test('a correction or approval follow-up is L3 under the turn task id plus :corr
 });
 
 test('kept or reverted edits are an L2 follow-up under :retention; anything else sends nothing', () => {
-  const reuse = reportedReuseOf(immediate({ applied: 'partial' }));
+  const reuse = reportedReuseOf(immediate());
   const kept = retentionReportOf(reuse, 'kept');
   assert.equal(kept.task_id, 'workbuddy:s1:4:retention');
   assert.equal(kept.outcome, 'success');
-  assert.deepEqual(kept.evidence, { tier: 'L2', applied: 'partial', stage: 'retention' });
+  assert.deepEqual(kept.evidence, { tier: 'L2', applied: 'used', stage: 'retention' });
   assert.equal(retentionReportOf(reuse, 'reverted').outcome, 'failed');
   assert.equal(retentionReportOf(reuse, 'rewritten'), null);
   assert.equal(retentionReportOf(reuse, 'no_change'), null);

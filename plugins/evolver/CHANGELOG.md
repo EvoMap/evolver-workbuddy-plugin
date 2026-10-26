@@ -29,8 +29,9 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   the candidate no try; at session end it still does.
 - Session-end distillation, for knowledge-dense turns only. A turn that
   completed with an answer, ran a check (test, lint, typecheck or build) and
-  passed the last one, changed files or ran three or more commands, and reused
-  no injected strategy leaves a candidate (secrets stripped); small talk,
+  passed the last one, and changed files or ran three or more commands leaves a
+  candidate (secrets stripped), whether or not it reused an injected strategy
+  (the engine's intake drops a Gene that repeats one it has); small talk,
   lookups and one-off commands never do. The model may answer
   `{"skip": "<why>"}` for routine work, which drops the candidate, and a Proxy
   answer of `status: "draft"` (stored nothing) counts as not stored and is not
@@ -47,7 +48,7 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   `publish: false` and `distill_usage`. A candidate is kept until distilled or
   three failed tries; leftovers of ended or killed sessions are claimed by the
   next worker, one process at a time.
-- Aborted reuse reports (`aborted: true`, tier `none`, `applied: partial`):
+- Aborted reuse reports (`aborted: true`, tier `none`, `applied: used`):
   at `SessionEnd` for every unreported injection, and at the next session start
   for those of a session whose CodeBuddy process is gone. Every turn-end report
   now carries `aborted`.
@@ -74,9 +75,12 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   injected through Proxy `POST /asset/reuse-result` as
   `{asset_id, outcome, task_id, reason, evidence}`, with evidence read off the
   turn's transcript: the last test/build/lint/type-check (exit code and output,
-  `fail_then_pass` with output pipes ignored) and whether the strategy's steps
-  show up in the turn's commands, paths, written code and answer. A turn with
-  nothing to compare goes out as tier `none` with `applied: partial`.
+  `fail_then_pass` with output pipes ignored) or how the turn ended. An
+  injected strategy counts as used (`applied: used` on every report, as in dsh
+  #55): the outcome, the next prompt and kept edits judge whether it helped. The
+  applied verdict that matched strategy steps against the turn, and the
+  per-turn buffer of written code it needed, are gone; `reason` names the turn
+  and the check kind.
 - Follow-up reports: the next prompt's correction or approval (`:correction`,
   L3) and, at the next session in the same project, whether the edited files
   were kept or reverted (`:retention`, L2). A `PreToolUse` hook on edit tools

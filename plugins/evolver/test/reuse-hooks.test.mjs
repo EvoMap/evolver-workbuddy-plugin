@@ -94,22 +94,22 @@ test('a recalled strategy is reported at turn end with L1 evidence through the P
     asset_id: ASSET_ID,
     outcome: 'success',
     task_id: 'workbuddy:s-lru:1',
-    reason: 'Injected by Evolver into WorkBuddy turn 1; applied: used; last test passed after failing earlier.',
+    reason: 'Injected by Evolver into WorkBuddy turn 1; last test passed after failing earlier.',
     evidence: { tier: 'L1', applied: 'used', check: { kind: 'test', passed: true, fail_then_pass: true }, aborted: false, stage: 'immediate' },
   });
   const [entry] = await waitFor(() => outbox().filter((candidate) => candidate.sentAt));
   assert.deepEqual(entry.receipt, { recorded: true, eligible: true, counted: true, weight: 1 });
 });
 
-test('a turn with nothing to compare reports tier none with applied partial, never unused', async () => {
+test('a turn that ran no check reports its injection as used at tier none', async () => {
   await startSession();
   const s = session('s-talk');
   await s.prompt('用 Node 写一个 LRU cache，带 get/set 和淘汰');
   appendFileSync(s.transcript, `${JSON.stringify({ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '用 Map 就行。' }] })}\n`);
   await s.stop();
   const [report] = await waitFor(() => (proxy.posts.length > 0 ? proxy.posts : null));
-  assert.deepEqual(report.evidence, { tier: 'none', applied: 'partial', aborted: false, stage: 'immediate' });
-  assert.match(report.reason, /applied: unknown/);
+  assert.deepEqual(report.evidence, { tier: 'none', applied: 'used', aborted: false, stage: 'immediate' });
+  assert.equal(report.reason, 'Injected by Evolver into WorkBuddy turn 1; no check ran.');
   assert.equal(report.outcome, 'success');
 });
 
@@ -235,4 +235,14 @@ test('a slow recall for an earlier prompt neither rolls the session back nor inj
   const stored = JSON.parse(readFileSync(join(sandbox.data, readdirSync(sandbox.data).find((name) => name.startsWith('session-'))), 'utf8'));
   assert.equal(stored.turn, 2);
   assert.deepEqual(Object.keys(stored.injected), [ASSET_ID]);
+});
+
+test('a verified turn that reused an injected strategy still becomes the distillation candidate', async () => {
+  await startSession();
+  const s = session('s-reused');
+  await lruTurn(s);
+  await waitFor(() => proxy.posts.length === 1);
+  const pending = JSON.parse(readFileSync(join(sandbox.data, 'workbuddy-distill-pending.json'), 'utf8'));
+  assert.ok(pending['s-reused'], 'the reused turn is a candidate');
+  assert.match(pending['s-reused'].prompt, /LRU cache/);
 });

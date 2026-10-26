@@ -1,12 +1,11 @@
 import crypto from 'node:crypto';
 import { closeSync, openSync, readSync, statSync } from 'node:fs';
 
-import { EDIT_TOOL_NAMES, editedContent } from './edited-content.mjs';
+import { EDIT_TOOL_NAMES, editedPath } from './edited-content.mjs';
 import { isVerificationCommand, verificationFailed } from './verification.mjs';
 
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const PATH_KEYS = ['file_path', 'notebook_path', 'path'];
-const TURN_EDITED_MAX_CHARS = 200_000;
 const CHECK_COMMAND_MAX_CHARS = 200;
 const EXIT_CODE = /^Exit Code: (-?\d+)/m;
 const TOOL_ERROR = /^\s*(?:Error\b|<tool_use_error>)/;
@@ -129,17 +128,11 @@ function lastAnswerOf(records) {
   return answers.length > 0 ? blocksText(answers.at(-1).content).trim() : '';
 }
 
-function editsOf(calls) {
-  const edits = [];
-  let chars = 0;
-  for (const call of calls) {
-    if (!EDIT_TOOL_NAMES.includes(call.name) || !editSucceeded(call.result)) continue;
-    const kept = editedContent(call.args).slice(0, TURN_EDITED_MAX_CHARS - chars);
-    if (!kept) continue;
-    edits.push(kept);
-    chars += kept.length;
-  }
-  return edits;
+function editedFilesOf(calls) {
+  return calls
+    .filter((call) => EDIT_TOOL_NAMES.includes(call.name) && editSucceeded(call.result))
+    .map((call) => editedPath(call.args))
+    .filter(Boolean);
 }
 
 export function turnActivityOf(records) {
@@ -147,7 +140,7 @@ export function turnActivityOf(records) {
   return {
     commands: calls.map((call) => call.args.command).filter((command) => typeof command === 'string'),
     paths: calls.flatMap((call) => PATH_KEYS.map((key) => call.args[key]).filter((value) => typeof value === 'string')),
-    edits: editsOf(calls),
+    edits: editedFilesOf(calls),
     checks: calls
       .filter((call) => isCheck(call) && call.result)
       .map((call) => ({ command: call.args.command.slice(0, CHECK_COMMAND_MAX_CHARS), failed: shellFailed(call.result) })),

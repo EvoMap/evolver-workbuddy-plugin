@@ -1,16 +1,14 @@
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { appliedVerdictOf } from '../lib/applied.mjs';
 import { checkEvidenceOf } from '../lib/checks.mjs';
 import { transcriptMark, transcriptSize, turnActivityOf, turnRecordsSince } from '../lib/transcript.mjs';
 
 const FIXTURE = new URL('./fixtures/workbuddy-lru-turn.jsonl', import.meta.url);
-const LRU_STRATEGY = JSON.parse(readFileSync(new URL('./fixtures/lru-turn.json', import.meta.url), 'utf8')).strategyText;
 
 function transcriptWith(text) {
   const file = join(mkdtempSync(join(tmpdir(), 'evolver-transcript-')), 'session.jsonl');
@@ -25,22 +23,21 @@ const bashRecords = (command, text, { status = 'completed', callId = 'c1', args 
 
 const shellText = (command, stdout, exit) => `Command: ${command}\nStdout: ${stdout}\nStderr: (empty)\nExit Code: ${exit}\nSignal: (none)`;
 
-test('a WorkBuddy turn yields its commands, paths, written code, checks and answer', () => {
+test('a WorkBuddy turn yields its commands, paths, edited files, checks and answer', () => {
   const turn = turnActivityOf(turnRecordsSince(fileURLToPath(FIXTURE), { offset: 0, fingerprint: '' }));
   assert.deepEqual(turn.checks, [
     { command: 'cd /tmp/lru-e2e && node --test 2>&1 | tail -12', failed: true },
     { command: 'cd /tmp/lru-e2e && node --test 2>&1 | tail -9', failed: false },
   ]);
-  assert.equal(turn.edits.length, 2);
+  assert.deepEqual(turn.edits, ['/tmp/lru-e2e/lru-cache.test.js', '/tmp/lru-e2e/lru-cache.js']);
   assert.ok(turn.paths.includes('/tmp/lru-e2e/lru-cache.js'));
   assert.equal(turn.answer, 'LRU 缓存写好了：Map 加双向链表，10 个测试全部通过。');
   assert.deepEqual(checkEvidenceOf(turn.checks), { kind: 'test', passed: true, fail_then_pass: true });
-  assert.equal(appliedVerdictOf({ strategyText: LRU_STRATEGY, ...turn }).verdict, 'used');
 });
 
-test('an edit the host refused writes nothing that counts, and a background run is no check', () => {
+test('an edit the host refused is no edited file, and a background run is no check', () => {
   const turn = turnActivityOf(turnRecordsSince(fileURLToPath(FIXTURE), { offset: 0, fingerprint: '' }));
-  assert.ok(!turn.edits.some((edit) => edit.includes('never written')));
+  assert.ok(!turn.edits.includes('/tmp/lru-e2e/README.md'));
   assert.ok(!turn.checks.some((check) => check.command.includes('--watch')));
   assert.ok(turn.commands.includes('node --test --watch'));
 });
@@ -65,15 +62,6 @@ test('a check whose call did not complete failed, and one with no result yet say
 test('PowerShell checks count too', () => {
   const records = bashRecords('npm test', shellText('npm test', 'ℹ fail 0', 0)).map((record) => ({ ...record, name: 'PowerShell' }));
   assert.equal(turnActivityOf(records).checks.length, 1);
-});
-
-test('written code is capped at 200,000 characters a turn', () => {
-  const big = 'x'.repeat(150_000);
-  const records = ['a', 'b'].flatMap((id) => [
-    { type: 'function_call', name: 'Write', callId: id, arguments: JSON.stringify({ file_path: `/p/${id}.js`, content: big }) },
-    { type: 'function_call_result', name: 'Write', callId: id, status: 'completed', output: { type: 'text', text: 'Successfully wrote' } },
-  ]);
-  assert.equal(turnActivityOf(records).edits.join('').length, 200_000);
 });
 
 test('only records after the turn offset are read, and a shrunken transcript falls back to the last prompt', () => {

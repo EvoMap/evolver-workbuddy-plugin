@@ -56,7 +56,7 @@ function deadPid() {
   return Number(child.stdout.toString());
 }
 
-test('only a completed turn proved by a passing check, with real work and no reused strategy, becomes a candidate', () => {
+test('only a completed turn proved by a passing check, with real work in it, becomes a candidate', () => {
   const passed = [{ command: 'npm test', failed: false }];
   const verified = (overrides = {}) => record({ checks: passed, edits: ['export const retry = 1;'], ...overrides });
   assert.equal(skipReason('completed', verified()), null);
@@ -67,7 +67,6 @@ test('only a completed turn proved by a passing check, with real work and no reu
   assert.equal(skipReason('completed', verified({ checks: [...passed, { command: 'npm test', failed: true }] })), 'failed_check');
   assert.equal(skipReason('completed', verified({ edits: [], commands: ['ls', 'npm test'] })), 'too_little_work');
   assert.equal(skipReason('completed', verified({ edits: [], commands: ['git log', 'grep -rn retry src', 'npm test'] })), null);
-  assert.equal(skipReason('completed', verified(), { reusedAsset: true }), 'asset_reused');
 });
 
 test("the model is the one behind the turn's latest assistant message", () => {

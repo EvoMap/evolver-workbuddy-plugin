@@ -11,7 +11,7 @@ This plugin packages Evolver as WorkBuddy hooks, slash commands and a few small 
 | Engine setup | SessionStart hook + background worker | Makes sure this machine has a running Evolver Proxy of at least the required version: installs or upgrades `@evomap/evolver` into the plugin's data folder (never `npm -g`, never `sudo`) and starts it with `evolver lifecycle start`, all in a detached process so the hook stays within its timeout. See [Automatic Evolver setup](#automatic-evolver-setup). |
 | Engine notice | SessionStart hook | Says nothing, except once for each outcome of the engine setup (installed, upgraded, started, or why it failed, with the manual fix). Fails open with `{}`. |
 | Prompt recall | UserPromptSubmit hook | Recalls by text through Proxy `/asset/fetch` (no ids, no `limit`: the Proxy default of 2 candidates) and injects one asset's complete strategy as an `[Evolution Memory]` block. Picks the best-scored asset with 4+ steps and at most 4000 strategy characters, each only once per session. Skips slash commands, acknowledgements, and prompts under 8 characters. 5s recall budget; fails open with `{}`. |
-| Reuse reports | FinalStop, SessionEnd, UserPromptSubmit, PreToolUse and SessionStart hooks | Reports every injected strategy to the Hub through Proxy `POST /asset/reuse-result`, with evidence read off the turn: the last test/build/lint/type-check, whether the strategy's steps show up in the turn's commands, paths, written code and answer, the next prompt's correction or approval, and whether the next session still has the edited files. See [Reuse reports](#reuse-reports). |
+| Reuse reports | FinalStop, SessionEnd, UserPromptSubmit, PreToolUse and SessionStart hooks | Reports every injected strategy to the Hub through Proxy `POST /asset/reuse-result`, with evidence read off the turn: the last test/build/lint/type-check or how the turn ended, the next prompt's correction or approval, and whether the next session still has the edited files. See [Reuse reports](#reuse-reports). |
 | Distillation | FinalStop, UserPromptSubmit, SessionEnd and SessionStart hooks + background worker | A turn proved by a passing check, with real work in it, leaves a candidate; at session end a detached worker turns it into a Gene with one headless model call. See [Session-end distillation](#session-end-distillation). |
 | Quick entry | Slash commands | `/evolver-status`, `/evolver-search`, `/evolver-distill`, `/evolver-evolve`, `/evolver-sync`, `/evolver-review`, `/evolver-run`, `/evolver-solidify`. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and audit events; WorkBuddy should not auto-apply generated output unless the user asks. |
@@ -103,18 +103,18 @@ By hand: `npm install -g @evomap/evolver@latest`, then `evolver lifecycle start`
 
 ## Reuse reports
 
-Every strategy the plugin injects is reported once per turn as `{asset_id, outcome, task_id, reason, evidence}` to Proxy `POST /asset/reuse-result`. `reason` names the turn, the applied verdict and the check kind, never the prompt, a command or code.
+Every strategy the plugin injects is reported once per turn as `{asset_id, outcome, task_id, reason, evidence}` to Proxy `POST /asset/reuse-result`. Reasons name the turn and the check kind, never the prompt, a command or code.
 
 | Report | `task_id` | `evidence` | Sent when |
 | --- | --- | --- | --- |
-| Turn end | `workbuddy:<session>:<turn>` | `tier` `L1` when a check ran, else `none`; `applied`; `check {kind, passed, fail_then_pass}`; `aborted: false`; `stage: immediate` | FinalStop hook: `completed` as completed, `interrupted` / `cancelled` as aborted (`aborted: true`), `failed` as an error |
-| Correction / approval | `…:correction` | `tier: L3`, `applied`, `stage: correction` | the next prompt plainly says the turn did not work, or thanks it |
-| Retention | `…:retention` | `tier: L2`, `applied`, `stage: retention` | the next session in the same project finds the edited files kept or reverted |
-| Aborted | `workbuddy:<session>:<turn>` | `tier: none`, `applied: partial`, `aborted: true`, `stage: immediate` | the session ends before the turn does (SessionEnd hook), or its host process was killed (at the next session start, once that process is gone) |
+| Turn end | `workbuddy:<session>:<turn>` | `tier` `L1` when a check ran, else `none`; `applied: used`; `check {kind, passed, fail_then_pass}`; `aborted: false`; `stage: immediate` | FinalStop hook: `completed` as completed, `interrupted` / `cancelled` as aborted (`aborted: true`), `failed` as an error |
+| Correction / approval | `…:correction` | `tier: L3`, `applied: used`, `stage: correction` | the next prompt plainly says the turn did not work, or thanks it |
+| Retention | `…:retention` | `tier: L2`, `applied: used`, `stage: retention` | the next session in the same project finds the edited files kept or reverted |
+| Aborted | `workbuddy:<session>:<turn>` | `tier: none`, `applied: used`, `aborted: true`, `stage: immediate` | the session ends before the turn does (SessionEnd hook), or its host process was killed (at the next session start, once that process is gone) |
 
-- The FinalStop hook reads the turn from the session transcript (`transcript_path`), starting at the size it had when the prompt was submitted: shell calls (`Bash`, `PowerShell`) with their `Exit Code` and output, `Write` / `Edit` / `MultiEdit` / `NotebookEdit` arguments (200,000 characters a turn at most, never stored), paths, and the last assistant message. FinalStop rather than Stop, because only FinalStop says how the turn ended (`final_stop_reason`), and it fires once a turn, after any Stop hook that asked the model to continue.
+- The FinalStop hook reads the turn from the session transcript (`transcript_path`), starting at the size it had when the prompt was submitted: shell calls (`Bash`, `PowerShell`) with their `Exit Code` and output, the files `Write` / `Edit` / `MultiEdit` / `NotebookEdit` changed, paths, and the last assistant message. FinalStop rather than Stop, because only FinalStop says how the turn ended (`final_stop_reason`), and it fires once a turn, after any Stop hook that asked the model to continue.
 - A check is the turn's last test, build, lint or type-check command not run in the background. It failed when its call did not complete, its exit code was not 0, or its output reports a failure. `fail_then_pass` compares the commands with output pipes and redirects (`| tail -9`, `2>&1`) removed.
-- `applied` is `used` when at least half the strategy's steps show up in the turn, `partial` when fewer do, `unused` when none do. When there is nothing to compare (only an answer, or no numbered steps) the report goes out as tier `none` with `applied: partial`, which the Hub weighs at 0 without the soft negative, and the reason says `applied: unknown`.
+- `applied` is always `used`: the model follows a strategy injected into its turn. Whether it helped is judged by the outcome (the last check, or how the turn ended), the next prompt and whether the edits are kept.
 - Outcome follows the last check; without one, a completed turn that left an answer is `success`, one that left none `failed`, and an errored or aborted turn `failed`.
 - The PreToolUse hook hashes each file before the turn's first edit to it, so the next session can tell kept from reverted.
 - Delivery goes through a queue that a detached worker drains, retried at every turn end and session start for 8 days. A Hub answer of `recorded`, `duplicate_report`, or `eligible: false` (`same_owner`, `daily_cap`) is final; `terminal: true`, `hub 400`, `hub 422` or a Proxy validation 400 is settled as rejected; `hub 404`, 5xx, 401/403/429, timeouts and an unreachable Proxy are retried.
@@ -126,8 +126,8 @@ State lives in `${CODEBUDDY_PLUGIN_DATA}` (fallback `~/.evolver/workbuddy-hooks/
 
 Only work dense enough to teach another agent is distilled, at most once a session. A turn qualifies when it
 ended completed with an answer, ran at least one check (a test, lint, typecheck or build command) and passed the
-last one, changed files or ran at least three commands, and reused no injected strategy (its reuse report
-carries that evidence instead). Small talk, lookups and one-off commands never qualify. Such a turn leaves a
+last one, and changed files or ran at least three commands. A turn that reused an injected strategy is a candidate too:
+the engine's intake drops a Gene that repeats one it already has. Small talk, lookups and one-off commands never qualify. Such a turn leaves a
 candidate in `${CODEBUDDY_PLUGIN_DATA}/workbuddy-distill-pending.json` (apart from other hosts' candidates, which
 run on another model; not in `~/.evolver`, which WorkBuddy's sandbox keeps `/evolver-*` commands from writing);
 a later verified turn replaces it, and a next prompt that reads as a correction drops it. When
