@@ -43,15 +43,20 @@ export function createDistiller({ proxyFetch, complete, timeoutMs = DISTILL_TIME
       return own ? run(own, focus) : { status: 'failed', error: 'another process is distilling this candidate' };
     },
     /**
-     * Sends the Gene the agent's own model wrote for this session's candidate, or drops the candidate when the
-     * agent judged it not worth one; a failed send costs no try.
+     * Sends the Gene the agent's own model wrote for the candidate stamped `writtenFor`, or drops that candidate
+     * when the agent judged it not worth one; a failed send costs no try, and a Gene written for a candidate
+     * that has since been replaced is not sent.
      */
-    async postGene(sessionId, text) {
+    async postGene(sessionId, text, writtenFor) {
       const declined = declineOf(text);
       const args = declined ? null : argumentsOf(text);
       if (!declined && !args) return { status: 'unparsed' };
       const own = claimCandidate(sessionId);
       if (!own) return dueCandidates({ sessionId }).length === 0 ? { status: 'nothing' } : { status: 'failed', error: 'another process is distilling this candidate' };
+      if (own.candidate.at !== writtenFor) {
+        settleCandidate(sessionId, own.candidate, { done: false, counted: false });
+        return { status: 'dropped' };
+      }
       const outcome = declined
         ? { status: 'declined', reason: declined }
         : storedOutcomeOf(await proxyFetch('POST', '/conversation/distill', distillBody(own.candidate, args), AbortSignal.timeout(timeoutMs)));

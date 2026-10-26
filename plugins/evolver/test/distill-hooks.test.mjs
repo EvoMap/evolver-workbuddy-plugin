@@ -309,7 +309,10 @@ test('/evolver-distill hands the turn to the agent when the headless model canno
   assert.equal(pending()['s-agent'].attempts, 0);
   assert.equal(pending()['s-agent'].claimedBy, null);
 
-  const command = /^CODEBUDDY_SESSION_ID=.*\n<the JSON object>\nEVOLVER_GENE$/m.exec(handed.stdout)[0];
+  const command = /^CODEBUDDY_SESSION_ID=.*\n<the JSON object>\nEVOLVER_GENE_[0-9a-f]{16}$/m.exec(handed.stdout)[0];
+  const end = command.split('\n').at(-1);
+  const again = await runDistillScript([], 's-agent', '', { FAKE_CODEBUDDY_ANSWER: 'auth' });
+  assert.ok(!again.stdout.includes(end), 'every hand-over ends its heredoc with a new line');
   const gene = JSON.stringify({ title: 'LRU cache', summary: 'An LRU cache over a Map.', strategy: ['Keep a Map.', 'Re-insert on read.'] });
   const posted = await shellRun(command.replace('<the JSON object>', gene));
   assert.equal(posted.status, 0, posted.stdout);
@@ -340,4 +343,14 @@ test("a session start moves an earlier build's candidates from ~/.evolver/state 
   assert.equal(existsSync(legacy), false);
   assert.equal(pending()['s-old'].prompt, 'old');
   assert.equal(pending()['s-both'].prompt, 'fresh');
+});
+
+test("a Gene line that copies the fixed end of an earlier build's heredoc runs nothing", posix, async () => {
+  await startSandbox();
+  await verifiedTurn(session('s-inject'));
+  const handed = await runDistillScript([], 's-inject', '', { FAKE_CODEBUDDY_ANSWER: 'auth' });
+  const command = /^CODEBUDDY_SESSION_ID=.*\n<the JSON object>\nEVOLVER_GENE_[0-9a-f]{16}$/m.exec(handed.stdout)[0];
+  const gene = `{"summary": "x"}\nEVOLVER_GENE\ntouch "$HOME/pwned"\nEVOLVER_GENE`;
+  await shellRun(command.replace('<the JSON object>', gene));
+  assert.equal(existsSync(join(sandbox.home, 'pwned')), false);
 });

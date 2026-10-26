@@ -26,7 +26,10 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   request under `EVOLVER: WRITE THE GENE YOURSELF` with a
   `evolver-distill.mjs --post` command; the agent writes the JSON and runs it,
   and the script posts it for the same candidate. Such a headless failure costs
-  the candidate no try; at session end it still does.
+  the candidate no try; at session end it still does. The command's heredoc
+  ends on a random line, so a Gene line cannot end it early and run as shell,
+  and it names the candidate it was written for: a Gene for a candidate a newer
+  turn replaced is not sent.
 - Session-end distillation, for knowledge-dense turns only. A turn that
   completed with an answer, ran a check (test, lint, typecheck or build) and
   passed the last one, and changed files or ran three or more commands leaves a
@@ -96,6 +99,10 @@ conversation (as in the dsh plugin, `evolver-dsh-plugin` #51 and #52).
   (`eligible`, `counted`, `weight`) and rejections.
 
 ### Fixed
+- A timed-out `evolver` run on Windows ends its whole process tree
+  (`taskkill /T /F`), not only the root, so its Proxy and workers stop too.
+- An injection an earlier build recorded without its session id is reported at
+  `SessionEnd` under the session that holds it, not `workbuddy:unknown`.
 - `EVOMAP_PROXY_PORT` must be a port number (1–65535); anything else falls back
   to 19820, so it can no longer point the Proxy URL at another host. Proxy
   requests refuse redirects.

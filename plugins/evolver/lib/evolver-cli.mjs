@@ -54,13 +54,17 @@ export function argumentsOf(rawInput) {
   return args;
 }
 
-// The CLI starts the Proxy and workers of its own, so a timed-out run takes down the whole process group it
-// leads rather than only the process this plugin started. Windows has no group to signal.
+// The CLI starts the Proxy and workers of its own, so a timed-out run takes down the whole process tree it
+// leads rather than only the process this plugin started. Windows has no group to signal; taskkill /T walks
+// the tree instead.
 function endTree(child) {
-  const target = IS_WINDOWS ? child.pid : -child.pid;
+  if (IS_WINDOWS) {
+    execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
+    return;
+  }
   const signalTree = (name) => {
     try {
-      process.kill(target, name);
+      process.kill(-child.pid, name);
     } catch {
     }
   };

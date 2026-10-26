@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 
-import { takeOrphanedUnreported } from '../lib/injected-ledger.mjs';
+import { takeOrphanedUnreported, takeUnreported } from '../lib/injected-ledger.mjs';
 import {
   argumentsOf, candidateOf, claimLeftoverCandidates, closeCandidate, distillCandidate, distillPrompt, dueCandidates,
   isCurrentCandidate, modelOf, rememberCandidate, settleCandidate, skipReason,
@@ -231,9 +231,30 @@ test('a Gene the Proxy keeps only as a draft counts as not stored, and is not se
 test("the agent's own model can also judge a turn not worth a Gene", async () => {
   const sent = [];
   const proxyFetch = async (method, path) => { sent.push(path); return { ok: true }; };
-  rememberCandidate('s-agent-skip', candidateOf({ prompt: 'rename a variable', record: record(), model: MODEL, turn: 1 }));
-  const outcome = await createDistiller({ proxyFetch, complete: null }).postGene('s-agent-skip', '{"skip": "a rename"}');
+  const candidate = candidateOf({ prompt: 'rename a variable', record: record(), model: MODEL, turn: 1 });
+  rememberCandidate('s-agent-skip', candidate);
+  const outcome = await createDistiller({ proxyFetch, complete: null }).postGene('s-agent-skip', '{"skip": "a rename"}', candidate.at);
   assert.equal(outcome.status, 'declined');
   assert.deepEqual(sent, []);
   assert.deepEqual(dueCandidates({ sessionId: 's-agent-skip' }), []);
+});
+
+test("an agent Gene written for a candidate a newer turn replaced is not sent, and the newer one stays", async () => {
+  const sent = [];
+  const proxyFetch = async (method, path) => { sent.push(path); return { ok: true }; };
+  const older = candidateOf({ prompt: 'add a retry', record: record(), model: MODEL, turn: 1, now: 1 });
+  const newer = candidateOf({ prompt: 'add a cache', record: record(), model: MODEL, turn: 2, now: 2 });
+  rememberCandidate('s-replaced', newer);
+  const outcome = await createDistiller({ proxyFetch, complete: null }).postGene('s-replaced', JSON.stringify(GENE), older.at);
+  assert.equal(outcome.status, 'dropped');
+  assert.deepEqual(sent, []);
+  const [due] = dueCandidates({ sessionId: 's-replaced' });
+  assert.equal(due.candidate.prompt, 'add a cache');
+  assert.equal(due.candidate.attempts, 0);
+  assert.equal(due.candidate.claimedBy, null);
+});
+
+test('an injection an earlier build recorded without its session is reported under the session that holds it', () => {
+  writeState(sessionStatePath('session', 's-legacy'), { turn: 3, injected: { 'sha256:old': { turn: 2, injectedAt: Date.now(), strategyText: '' } } });
+  assert.deepEqual(takeUnreported('s-legacy', Infinity).map(({ assetId, sessionId }) => ({ assetId, sessionId })), [{ assetId: 'sha256:old', sessionId: 's-legacy' }]);
 });

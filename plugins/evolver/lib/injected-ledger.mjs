@@ -57,7 +57,8 @@ export function takeUnreported(sessionId, turn, now = Date.now()) {
   if (!sessionId) return [];
   let due = [];
   updateSession(sessionId, (session) => {
-    due = unreportedOf(session.injected, turn);
+    // Entries an earlier build wrote carry no session of their own; they belong to the session that holds them.
+    due = unreportedOf(session.injected, turn).map((asset) => ({ ...asset, sessionId: asset.sessionId ?? sessionId }));
     return due.length > 0 ? { ...session, injected: withReported(session.injected, due.map((asset) => asset.assetId), now) } : undefined;
   });
   return due;
