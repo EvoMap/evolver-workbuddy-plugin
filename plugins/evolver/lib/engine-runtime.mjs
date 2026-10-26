@@ -77,6 +77,10 @@ function managedEngineAt(prefix) {
   }
 }
 
+export function managedEnginePath(prefix = engineDir()) {
+  return managedEngineAt(prefix)?.path ?? null;
+}
+
 async function pathEngine() {
   const probe = await run('evolver', ['--version'], { timeoutMs: PROBE_TIMEOUT_MS, env: process.env, shell: IS_WINDOWS });
   const version = probe.ok ? versionOf(probe.stdout) : null;

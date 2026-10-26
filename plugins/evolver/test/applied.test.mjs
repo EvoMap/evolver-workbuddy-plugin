@@ -11,7 +11,7 @@ const STRATEGY = [
   '3. Wrap the client in a singleton factory module',
   '4. Close the connection in the global teardown hook',
   '',
-  'Apply it where it fits, then report the outcome with evolver_asset_reuse_result for sha256:abc.',
+  'Apply them where they fit.',
 ].join('\n');
 
 test('only the numbered steps of an injected strategy are matched', () => {

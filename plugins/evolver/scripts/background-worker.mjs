@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-import { DRAIN_TASK, ENGINE_TASK } from '../lib/background.mjs';
+import { DISTILL_TASK, DRAIN_TASK, ENGINE_TASK } from '../lib/background.mjs';
+import { createDistiller } from '../lib/distiller.mjs';
 import { setUpEngine } from '../lib/engine-job.mjs';
 import { engineRuntime } from '../lib/engine-runtime.mjs';
-import { postReuseResult } from '../lib/proxy-client.mjs';
+import { headlessModel } from '../lib/headless-model.mjs';
+import { postReuseResult, proxyFetch } from '../lib/proxy-client.mjs';
 import { drainOutbox } from '../lib/report-queue.mjs';
 import { pruneOldSessions } from '../lib/session-state.mjs';
 
@@ -24,4 +26,5 @@ if (tasks.has(ENGINE_TASK)) {
   }));
 }
 if (tasks.has(DRAIN_TASK)) results.push(await ranCleanly(() => drainOutbox(postReuseResult)));
+if (tasks.has(DISTILL_TASK)) results.push(await ranCleanly(() => createDistiller({ proxyFetch, complete: headlessModel() }).distillLeftovers()));
 process.exit(results.every(Boolean) ? 0 : 1);

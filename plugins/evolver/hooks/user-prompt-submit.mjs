@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { DRAIN_TASK, startInBackground } from '../lib/background.mjs';
+import { isEvolverCommand } from '../lib/command-turn.mjs';
 import { feedbackLabelOf } from '../lib/feedback-label.mjs';
 import { runHook } from '../lib/hook-io.mjs';
-import { withInjected } from '../lib/injected-ledger.mjs';
+import { rememberInjected } from '../lib/injected-ledger.mjs';
 import { proxyConnection, proxyRequest } from '../lib/proxy-client.mjs';
 import { withoutSecrets } from '../lib/redact.mjs';
 import { queueReports } from '../lib/report-queue.mjs';
 import { correctionReportOf } from '../lib/reuse.mjs';
-import { readSession, writeSession } from '../lib/session-state.mjs';
+import { dropCandidate } from '../lib/session-distill.mjs';
+import { readSession, updateSession } from '../lib/session-state.mjs';
 import { bestStrategy, formatStrategy, recalledAssets } from '../lib/strategy-recall.mjs';
 import { transcriptMark } from '../lib/transcript.mjs';
 
@@ -24,9 +26,8 @@ function isWorthRecalling(prompt) {
   return [...prompt].length >= MIN_PROMPT_CHARS;
 }
 
-function reportFollowUp(sessionId, session, prompt) {
+function reportFollowUp(sessionId, session, label) {
   if (session.labelable.length === 0) return;
-  const label = feedbackLabelOf(prompt);
   const reports = session.labelable.map((reuse) => correctionReportOf(reuse, label)).filter(Boolean);
   if (reports.length === 0) return;
   queueReports(reports.map((report) => ({ report, sessionId })));
@@ -41,10 +42,16 @@ async function recallByText(text) {
   return recalledAssets(body);
 }
 
-function startTurn(sessionId, input, previous) {
-  const session = { ...previous, turn: previous.turn + 1, turnStart: transcriptMark(input.transcript_path), labelable: [] };
-  writeSession(sessionId, session);
-  return session;
+// A command turn leaves the last real turn's reuses to be labelled by the next real prompt.
+function startTurn(sessionId, input, prompt, isCommand) {
+  const turnStart = transcriptMark(input.transcript_path);
+  return updateSession(sessionId, (session) => ({
+    ...session,
+    turn: session.turn + 1,
+    turnStart,
+    labelable: isCommand ? session.labelable : [],
+    prompt: withoutSecrets(prompt),
+  }));
 }
 
 async function recallContext(input) {
@@ -52,21 +59,23 @@ async function recallContext(input) {
   const sessionId = typeof input.session_id === 'string' ? input.session_id : '';
   if (!sessionId) return '';
 
-  const previous = readSession(sessionId);
-  reportFollowUp(sessionId, previous, prompt);
-  const session = startTurn(sessionId, input, previous);
+  // The next prompt is the only verdict on a turn available without asking anyone: when it reads as a
+  // correction, the reuse reports are revised and the turn is no longer worth distilling.
+  const isCommand = isEvolverCommand(prompt);
+  if (!isCommand) {
+    const label = feedbackLabelOf(prompt);
+    if (label === 'correction') dropCandidate(sessionId);
+    reportFollowUp(sessionId, readSession(sessionId), label);
+  }
+  const session = startTurn(sessionId, input, prompt, isCommand);
 
   const text = withoutSecrets(prompt).slice(0, PROMPT_MAX_CHARS);
-  if (!isWorthRecalling(text)) return '';
+  if (isCommand || !isWorthRecalling(text)) return '';
   const match = bestStrategy(await recallByText(text), new Set(Object.keys(session.injected)));
   if (!match) return '';
 
-  const latest = readSession(sessionId);
-  if (latest.injected[match.asset.asset_id]) return '';
   const injection = formatStrategy(match);
-  const injected = withInjected(latest.injected, match.asset.asset_id, { turn: session.turn, strategyText: injection }, Date.now());
-  writeSession(sessionId, { ...latest, injected });
-  return injection;
+  return rememberInjected(sessionId, match.asset.asset_id, { turn: session.turn, strategyText: injection }) ? injection : '';
 }
 
 runHook('UserPromptSubmit', recallContext);

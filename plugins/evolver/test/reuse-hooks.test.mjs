@@ -55,7 +55,7 @@ function session(id) {
     start: () => runHook('session-start', { ...base, hook_event_name: 'SessionStart', source: 'startup' }, sandbox.env),
     prompt: (prompt) => runHook('user-prompt-submit', { ...base, hook_event_name: 'UserPromptSubmit', prompt }, sandbox.env),
     beforeEdit: (file) => runHook('pre-tool-use', { ...base, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: file, content: 'x' } }, sandbox.env),
-    stop: (extra = {}) => runHook('stop', { ...base, hook_event_name: 'Stop', stop_hook_active: false, ...extra }, sandbox.env),
+    stop: (extra = {}) => runHook('final-stop', { ...base, hook_event_name: 'FinalStop', final_stop_reason: 'completed', ...extra }, sandbox.env),
   };
 }
 
@@ -78,7 +78,7 @@ async function lruTurn(s) {
   await s.beforeEdit(file);
   writeFileSync(file, 'export class LruCache {}\n');
   appendFileSync(s.transcript, LRU_TURN);
-  await s.stop({ last_assistant_message: 'LRU 缓存写好了。' });
+  await s.stop();
   return { injected, file };
 }
 
@@ -95,7 +95,7 @@ test('a recalled strategy is reported at turn end with L1 evidence through the P
     outcome: 'success',
     task_id: 'workbuddy:s-lru:1',
     reason: 'Injected by Evolver into WorkBuddy turn 1; applied: used; last test passed after failing earlier.',
-    evidence: { tier: 'L1', applied: 'used', check: { kind: 'test', passed: true, fail_then_pass: true }, stage: 'immediate' },
+    evidence: { tier: 'L1', applied: 'used', check: { kind: 'test', passed: true, fail_then_pass: true }, aborted: false, stage: 'immediate' },
   });
   const [entry] = await waitFor(() => outbox().filter((candidate) => candidate.sentAt));
   assert.deepEqual(entry.receipt, { recorded: true, eligible: true, counted: true, weight: 1 });
@@ -108,7 +108,7 @@ test('a turn with nothing to compare reports tier none with applied partial, nev
   appendFileSync(s.transcript, `${JSON.stringify({ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '用 Map 就行。' }] })}\n`);
   await s.stop();
   const [report] = await waitFor(() => (proxy.posts.length > 0 ? proxy.posts : null));
-  assert.deepEqual(report.evidence, { tier: 'none', applied: 'partial', stage: 'immediate' });
+  assert.deepEqual(report.evidence, { tier: 'none', applied: 'partial', aborted: false, stage: 'immediate' });
   assert.match(report.reason, /applied: unknown/);
   assert.equal(report.outcome, 'success');
 });
@@ -120,7 +120,7 @@ test('each injection is reported once, and a turn without one reports nothing', 
   await waitFor(() => proxy.posts.length === 1);
   const again = await s.prompt('用 Node 写一个 LRU cache，带 get/set 和淘汰，再来一次');
   assert.deepEqual(again, {});
-  await s.stop({ last_assistant_message: 'ok' });
+  await s.stop();
   await new Promise((resolve) => setTimeout(resolve, 600));
   assert.equal(proxy.posts.length, 1);
 });

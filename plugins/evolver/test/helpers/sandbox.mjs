@@ -39,6 +39,8 @@ function readBody(req) {
 export async function fakeProxy({ assets = [], reuseAnswers = [], fetchDelaysMs = [] } = {}) {
   const posts = [];
   const recalls = [];
+  const distills = [];
+  const searches = [];
   const answers = [...reuseAnswers];
   const server = http.createServer(async (req, res) => {
     const body = await readBody(req);
@@ -59,10 +61,18 @@ export async function fakeProxy({ assets = [], reuseAnswers = [], fetchDelaysMs 
       const [status, payload] = answers.length > 1 ? answers.shift() : (answers[0] ?? [200, { recorded: true, eligible: true, counted: true, weight: 1 }]);
       return reply(status, payload);
     }
+    if (req.url === '/asset/search') {
+      searches.push(body);
+      return reply(200, { assets: [{ asset_id: 'sha256:found' }] });
+    }
+    if (req.url === '/conversation/distill') {
+      distills.push(body);
+      return reply(200, { ok: true, gene_id: 'gene_test' });
+    }
     return reply(404, {});
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  return { url: `http://127.0.0.1:${server.address().port}`, posts, recalls, close: () => new Promise((resolve) => server.close(resolve)) };
+  return { url: `http://127.0.0.1:${server.address().port}`, posts, recalls, distills, searches, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
 export function runHook(name, input, env) {

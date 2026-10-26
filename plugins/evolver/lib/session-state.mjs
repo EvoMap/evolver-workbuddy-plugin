@@ -2,20 +2,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { OUTBOX_TTL_MS } from './report-outbox.mjs';
-import { appendStateLine, readState, sessionStatePath, stateDir, takeStateLines, writeState } from './state-file.mjs';
+import { appendStateLine, readState, sessionStatePath, stateDir, takeStateLines, updateState } from './state-file.mjs';
 
 const SESSION_FILE = /^(?:session-[0-9a-f]{16}\.json|edits-[0-9a-f]{16}\.jsonl)$/;
+export const SESSION_PREFIX = 'session';
 
-const sessionPath = (sessionId) => sessionStatePath('session', sessionId);
+const sessionPath = (sessionId) => sessionStatePath(SESSION_PREFIX, sessionId);
+const withDefaults = (state) => ({ turn: 0, turnStart: null, injected: {}, labelable: [], ...state });
 const editsPath = (sessionId) => sessionStatePath('edits', sessionId, 'jsonl');
 
 export function readSession(sessionId) {
-  const state = readState(sessionPath(sessionId), {});
-  return { turn: 0, turnStart: null, injected: {}, labelable: [], ...state };
+  return withDefaults(readState(sessionPath(sessionId), {}));
 }
 
-export function writeSession(sessionId, state) {
-  writeState(sessionPath(sessionId), state);
+/** Changes a session's state under the state lock; `mutate` returns the next state, or undefined to keep it. */
+export function updateSession(sessionId, mutate) {
+  return updateState(sessionPath(sessionId), {}, (state) => mutate(withDefaults(state)));
 }
 
 export function noteFileBefore(sessionId, file, hash) {

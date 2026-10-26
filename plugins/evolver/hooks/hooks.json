@@ -1,5 +1,5 @@
 {
-  "description": "Evolver session context and background engine setup, prompt-relevant strategy recall, and automatic reuse reports at turn end",
+  "description": "Evolver background engine setup, prompt-relevant strategy recall, reuse reports at turn and session end, and session-end distillation",
   "hooks": {
     "SessionStart": [
       {
@@ -35,13 +35,24 @@
         ]
       }
     ],
-    "Stop": [
+    "FinalStop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/hooks/stop.mjs\"",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/hooks/final-stop.mjs\"",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/hooks/session-end.mjs\"",
+            "timeout": 5
           }
         ]
       }

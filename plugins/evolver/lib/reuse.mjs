@@ -1,6 +1,7 @@
 import { UNKNOWN } from './applied.mjs';
 import { checkEvidenceOf } from './checks.mjs';
 import { REJECTED, RETRY, SENT, isSettled, withAttempt } from './report-outbox.mjs';
+import { outcomeOfReason } from './turn-outcomes.mjs';
 
 const LABEL_OUTCOMES = { correction: 'failed', praise: 'success' };
 const RETENTION_OUTCOMES = { kept: 'success', reverted: 'failed' };
@@ -11,19 +12,21 @@ export function turnTaskId(sessionId, turn) {
   return `workbuddy:${sessionId || 'unknown'}:${turn ?? 'unknown'}`;
 }
 
-export function immediateEvidenceOf({ checks, applied }) {
+export function immediateEvidenceOf({ checks, applied, reasonKind }) {
   const check = checkEvidenceOf(checks);
   const isKnown = applied !== UNKNOWN;
   return {
     tier: check && isKnown ? 'L1' : 'none',
     applied: isKnown ? applied : UNKNOWN_APPLIED_AS,
     ...(check && { check }),
+    aborted: reasonKind === 'aborted',
     stage: 'immediate',
   };
 }
 
-function immediateOutcomeOf(evidence, answered) {
+function immediateOutcomeOf(evidence, reasonKind, answered) {
   if (evidence.check) return evidence.check.passed ? 'success' : 'failed';
+  if (reasonKind !== 'completed') return outcomeOfReason(reasonKind) ?? 'failed';
   return answered ? 'success' : 'failed';
 }
 
@@ -37,13 +40,13 @@ function reportOf({ assetId, taskId, outcome, reason, evidence }) {
   return { asset_id: assetId, outcome, task_id: taskId, reason, evidence };
 }
 
-export function immediateReportOf({ assetId, sessionId, turn, answered, checks, applied }) {
-  const evidence = immediateEvidenceOf({ checks, applied });
+export function immediateReportOf({ asset, sessionId, turn, reasonKind, answered, checks, applied }) {
+  const evidence = immediateEvidenceOf({ checks, applied, reasonKind });
   const ending = answered ? '' : '; the turn left no answer';
   return reportOf({
-    assetId,
+    assetId: asset.assetId,
     taskId: turnTaskId(sessionId, turn),
-    outcome: immediateOutcomeOf(evidence, answered),
+    outcome: immediateOutcomeOf(evidence, reasonKind, answered),
     reason: `Injected by Evolver into WorkBuddy turn ${turn}; applied: ${applied}; ${checkPhrase(evidence.check)}${ending}.`,
     evidence,
   });

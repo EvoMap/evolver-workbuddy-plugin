@@ -25,7 +25,7 @@ function proxy(answer = { ok: true, status: 200, data: { recorded: true } }) {
   };
 }
 
-const immediate = (overrides = {}) => immediateReportOf({ assetId: 'sha256:a', sessionId: 's1', turn: 4, answered: true, checks: [], applied: 'used', ...overrides });
+const immediate = (overrides = {}) => immediateReportOf({ asset: { assetId: 'sha256:a' }, sessionId: 's1', turn: 4, reasonKind: 'completed', answered: true, checks: [], applied: 'used', ...overrides });
 const queuedOne = (report) => withQueued({}, [{ report, sessionId: 's1' }], NOW);
 const verified = () => immediate({ checks: [{ command: 'npm test', failed: false }] });
 
@@ -35,7 +35,7 @@ test('a turn that ran no check still reports its injection, as tier none', () =>
     outcome: 'success',
     task_id: 'workbuddy:s1:4',
     reason: 'Injected by Evolver into WorkBuddy turn 4; applied: used; no check ran.',
-    evidence: { tier: 'none', applied: 'used', stage: 'immediate' },
+    evidence: { tier: 'none', applied: 'used', aborted: false, stage: 'immediate' },
   });
 });
 
@@ -47,7 +47,7 @@ test('a turn that left no answer and ran no check failed', () => {
 
 test('the request body carries exactly the contract fields', () => {
   assert.deepEqual(Object.keys(verified()).sort(), ['asset_id', 'evidence', 'outcome', 'reason', 'task_id']);
-  assert.deepEqual(Object.keys(verified().evidence).sort(), ['applied', 'check', 'stage', 'tier']);
+  assert.deepEqual(Object.keys(verified().evidence).sort(), ['aborted', 'applied', 'check', 'stage', 'tier']);
   assert.deepEqual(Object.keys(verified().evidence.check).sort(), ['fail_then_pass', 'kind', 'passed']);
 });
 
@@ -78,7 +78,7 @@ test('a report reveals no command, prompt or code', () => {
 
 test('a reuse that cannot be judged is exposure only, without the unused penalty', () => {
   const report = immediate({ applied: 'unknown' });
-  assert.deepEqual(report.evidence, { tier: 'none', applied: 'partial', stage: 'immediate' });
+  assert.deepEqual(report.evidence, { tier: 'none', applied: 'partial', aborted: false, stage: 'immediate' });
   assert.match(report.reason, /applied: unknown/);
   assert.equal(immediate({ applied: 'unknown', checks: [{ command: 'npm test', failed: false }] }).evidence.tier, 'none');
 });

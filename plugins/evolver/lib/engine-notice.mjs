@@ -1,4 +1,3 @@
-import { FAILURES } from './engine-setup.mjs';
 import { MIN_EVOLVER_VERSION } from './engine-version.mjs';
 
 const MANUAL_INSTALL = 'To set it up by hand: `npm install -g @evomap/evolver@latest`, then `evolver lifecycle start`.';
@@ -26,8 +25,4 @@ const NOTICES = {
 
 export function engineNoticeOf(outcome) {
   return NOTICES[outcome?.status]?.(outcome) ?? null;
-}
-
-export function isFailure(outcome) {
-  return FAILURES.has(outcome?.status);
 }

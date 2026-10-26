@@ -1,6 +1,5 @@
-// Steps are never truncated: the block promises complete steps, and the long
-// ones are the code/template contracts that break when cut. STRATEGY_MAX_CHARS
-// alone bounds the injection cost.
+// Steps are never truncated: the long ones are the code/template contracts
+// that break when cut. STRATEGY_MAX_CHARS alone bounds the injection cost.
 
 const TITLE_MAX_CHARS = 80;
 const MIN_STRATEGY_STEPS = 4;
@@ -78,7 +77,6 @@ export function formatStrategy({ asset, steps }) {
     `[Evolution Memory] ${readableNameOf(asset)} (EvoMap network):`,
     ...steps.map((step, index) => `${index + 1}. ${step}`),
     '',
-    'These are the complete steps already recalled from the network, so there is nothing more to search or fetch for this task.',
-    `Apply them where they fit, then report the outcome with evolver_asset_reuse_result for ${asset.asset_id}.`
+    'Apply them where they fit.',
   ].join('\n');
 }

@@ -6,9 +6,10 @@ const WORKER = fileURLToPath(new URL('../scripts/background-worker.mjs', import.
 
 export const ENGINE_TASK = 'engine';
 export const DRAIN_TASK = 'drain';
+export const DISTILL_TASK = 'distill';
 
 // Hooks run under a timeout, so slow work (npm install, starting the Proxy,
-// posting reports) runs in a detached child that outlives the hook process.
+// posting reports, distilling a session) runs in a detached child that outlives the hook process.
 export function startInBackground(tasks) {
   if (tasks.length === 0) return;
   const child = spawn(process.execPath, [WORKER, ...tasks], {
